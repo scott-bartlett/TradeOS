@@ -9,8 +9,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
 
     # AI
-    ai_provider: str = "openai"
+    ai_provider: str = "anthropic"
     openai_api_key: str = ""
+    anthropic_api_key: str = ""
 
     # Cloudflare R2
     r2_account_id: str = ""
