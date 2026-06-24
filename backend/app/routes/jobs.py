@@ -360,3 +360,33 @@ async def set_quote_total(
         "quote_total": float(job.quote_total),
         "message": "Quote total set successfully"
     }
+@router.get("/{job_id}/supply-items")
+async def get_supply_items(
+    job_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all supply items for a job."""
+    from app.models.supply_and_field import JobSupplyItem
+    result = await db.execute(
+        select(JobSupplyItem).where(
+            JobSupplyItem.job_id == uuid.UUID(job_id)
+        )
+    )
+    items = result.scalars().all()
+    return {
+        "job_id": job_id,
+        "items": [
+            {
+                "item_id": str(i.id),
+                "sku": i.sku,
+                "description": i.description,
+                "quantity": float(i.quantity),
+                "unit": i.unit,
+                "unit_cost": float(i.unit_cost) if i.unit_cost else None,
+                "source": i.source,
+                "is_approved": i.is_approved,
+            }
+            for i in items
+        ],
+        "total": len(items)
+    }
