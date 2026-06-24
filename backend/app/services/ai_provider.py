@@ -82,7 +82,7 @@ async def analyze_photo(photo_url: str) -> dict:
         content_type = response.headers.get("content-type", "image/jpeg")
 
     message = client.messages.create(
-        model="settings.anthropic_model",
+        model=settings.anthropic_model,
         max_tokens=1024,
         messages=[
             {
@@ -178,7 +178,7 @@ async def generate_supply_list(
     )
 
     message = client.messages.create(
-        model="settings.anthropic_model",
+        model=settings.anthropic_model,
         max_tokens=4096,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -241,7 +241,7 @@ Return ONLY a JSON object (no markdown):
 }}"""
 
     message = client.messages.create(
-        model="settings.anthropic_model",
+        model=settings.anthropic_model,
         max_tokens=256,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -298,7 +298,7 @@ Write in plain English — no bullet points, no headers.
 Return ONLY the summary paragraph, nothing else."""
 
     message = client.messages.create(
-        model="settings.anthropic_model",
+        model=settings.anthropic_model,
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -339,7 +339,7 @@ Return ONLY a JSON array of flags (no markdown), maximum 5 flags, most important
 ]"""
 
     message = client.messages.create(
-        model="settings.anthropic_model",
+        model=settings.anthropic_model,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}]
     )
