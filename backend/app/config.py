@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     ai_provider: str = "anthropic"
     openai_api_key: str = ""
     anthropic_api_key: str = ""
+    anthropic_model: str = "claude-opus-4-6"
 
     # Cloudflare R2
     r2_account_id: str = ""
