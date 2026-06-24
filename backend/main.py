@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import health, jobs, photos
+from app.routes import health, jobs, photos, customers
 
 app = FastAPI(
     title="TradeOS API",
@@ -8,19 +8,18 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# CORS — allows the frontend to talk to the backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Lock this down before production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Routes
 app.include_router(health.router)
-app.include_router(jobs.router, prefix="/api/jobs", tags=["jobs"])
-app.include_router(photos.router, prefix="/api/photos", tags=["photos"])
+app.include_router(jobs.router,      prefix="/api/jobs",      tags=["jobs"])
+app.include_router(photos.router,    prefix="/api/photos",    tags=["photos"])
+app.include_router(customers.router, prefix="/api/customers", tags=["customers"])
 
 @app.get("/")
 def root():
