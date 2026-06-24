@@ -318,3 +318,45 @@ async def get_field_notes(
         ],
         "total": len(notes)
     }
+
+
+# ── SET QUOTE TOTAL ───────────────────────────────────────────────────────────
+
+class QuoteTotalUpdate(BaseModel):
+    quote_total: float
+    estimated_hours: Optional[float] = None
+    labor_rate: Optional[float] = None
+    material_markup: Optional[float] = None
+
+
+@router.patch("/{job_id}/quote-total")
+async def set_quote_total(
+    job_id: str,
+    data: QuoteTotalUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Set the customer-facing quote total.
+    This is the price Jamie enters after reviewing the AI suggestion.
+    Required before sending a quote to the customer.
+    """
+    result = await db.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job.quote_total = data.quote_total
+    if data.estimated_hours is not None:
+        job.estimated_hours = data.estimated_hours
+    if data.labor_rate is not None:
+        job.labor_rate = data.labor_rate
+    if data.material_markup is not None:
+        job.material_markup = data.material_markup
+
+    await db.commit()
+
+    return {
+        "job_id": job_id,
+        "quote_total": float(job.quote_total),
+        "message": "Quote total set successfully"
+    }
