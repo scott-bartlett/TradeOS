@@ -1,14 +1,18 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { customersApi } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Plus, Building2, Home } from 'lucide-react';
+import { Building2, Home, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { NewCustomerDialog } from '@/components/new-customer-dialog';
 
 export default function CustomersPage() {
   const router = useRouter();
+  const [showNew, setShowNew] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['customers'],
     queryFn: () => customersApi.list(),
@@ -23,7 +27,10 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
           <p className="text-sm text-gray-500 mt-1">{customers.length} total</p>
         </div>
-        <Button className="bg-[#1A6E45] hover:bg-[#145a38]">
+        <Button
+          className="bg-[#1A6E45] hover:bg-[#145a38]"
+          onClick={() => setShowNew(true)}
+        >
           <Plus size={16} className="mr-2" />
           New Customer
         </Button>
@@ -45,10 +52,10 @@ export default function CustomersPage() {
                 >
                   <div className="flex items-center gap-4">
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      customer.customer_type === 'commercial' 
+                      customer.customer_type === 'commercial'
                         ? 'bg-blue-50' : 'bg-[#E8F5EE]'
                     }`}>
-                      {customer.customer_type === 'commercial' 
+                      {customer.customer_type === 'commercial'
                         ? <Building2 size={15} className="text-blue-600" />
                         : <Home size={15} className="text-[#1A6E45]" />
                       }
@@ -74,6 +81,8 @@ export default function CustomersPage() {
           )}
         </CardContent>
       </Card>
+
+      <NewCustomerDialog open={showNew} onClose={() => setShowNew(false)} />
     </div>
   );
 }
