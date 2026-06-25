@@ -7,69 +7,122 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
+const emptyForm = {
+  customer_type: 'residential',
+  display_name: '',
+  first_name: '',
+  last_name: '',
+  company_name: '',
+  email: '',
+  phone: '',
+  billing_street: '',
+  billing_city: '',
+  billing_state: '',
+  billing_zip: '',
+  // Commercial service location
+  location_name: '',
+  location_contact_name: '',
+  location_contact_phone: '',
+  location_street: '',
+  location_city: '',
+  location_state: '',
+  location_zip: '',
+  access_notes: '',
+};
+
 export function NewCustomerDialog({ open, onClose }: Props) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({
-    customer_type: 'residential',
-    display_name: '',
-    first_name: '',
-    last_name: '',
-    company_name: '',
-    email: '',
-    phone: '',
-    billing_street: '',
-    billing_city: '',
-    billing_state: '',
-    billing_zip: '',
-  });
-
-  const mutation = useMutation({
-    mutationFn: () => customersApi.create(form),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['customers'] });
-      onClose();
-      // Reset form
-      setForm({
-        customer_type: 'residential',
-        display_name: '',
-        first_name: '',
-        last_name: '',
-        company_name: '',
-        email: '',
-        phone: '',
-        billing_street: '',
-        billing_city: '',
-        billing_state: '',
-        billing_zip: '',
-      });
-    },
-  });
+  const [form, setForm] = useState({ ...emptyForm });
 
   const set = (key: string, value: string) =>
     setForm(prev => ({ ...prev, [key]: value }));
 
   const isCommercial = form.customer_type === 'commercial';
 
-  // Auto-build display name
   const handleNameChange = (key: string, value: string) => {
     set(key, value);
     if (!isCommercial) {
       const first = key === 'first_name' ? value : form.first_name;
-      const last = key === 'last_name' ? value : form.last_name;
+      const last  = key === 'last_name'  ? value : form.last_name;
       set('display_name', `${first} ${last}`.trim());
     }
   };
 
+  const mutation = useMutation({
+    mutationFn: async () => {
+      // 1. Create customer
+      const customer = await customersApi.create({
+        customer_type: form.customer_type,
+        display_name:  form.display_name,
+        first_name:    form.first_name  || null,
+        last_name:     form.last_name   || null,
+        company_name:  form.company_name || null,
+        email:         form.email       || null,
+        phone:         form.phone       || null,
+        billing_street: form.billing_street || null,
+        billing_city:   form.billing_city   || null,
+        billing_state:  form.billing_state  || null,
+        billing_zip:    form.billing_zip    || null,
+      });
+
+      // 2. Auto-create service location
+      if (isCommercial) {
+        // Commercial — use the location fields they filled in
+        await customersApi.addLocation(customer.customer_id, {
+          location_name:    form.location_name    || form.company_name,
+          contact_name:     form.location_contact_name || null,
+          contact_phone:    form.location_contact_phone || null,
+          street:           form.location_street  || form.billing_street,
+          city:             form.location_city    || form.billing_city,
+          state:            form.location_state   || form.billing_state,
+          zip_code:         form.location_zip     || form.billing_zip,
+          access_notes:     form.access_notes     || null,
+        });
+      } else {
+        // Residential — auto-create from billing address
+        if (form.billing_street) {
+          await customersApi.addLocation(customer.customer_id, {
+            location_name:  `${form.first_name} ${form.last_name}`.trim(),
+            contact_name:   `${form.first_name} ${form.last_name}`.trim(),
+            contact_phone:  form.phone || null,
+            street:         form.billing_street,
+            city:           form.billing_city,
+            state:          form.billing_state,
+            zip_code:       form.billing_zip,
+            access_notes:   null,
+          });
+        }
+      }
+
+      return customer;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      setForm({ ...emptyForm });
+      onClose();
+    },
+  });
+
+  const canSubmit = form.display_name &&
+  form.billing_street &&
+  form.billing_city &&
+  form.billing_state &&
+  form.billing_zip && (
+    isCommercial
+      ? form.location_street && form.location_city && form.location_state && form.location_zip
+      : true
+  );
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Customer</DialogTitle>
         </DialogHeader>
@@ -78,24 +131,23 @@ export function NewCustomerDialog({ open, onClose }: Props) {
           {/* Type */}
           <div>
             <Label className="text-xs">Customer Type</Label>
-            <Select value={form.customer_type} onValueChange={v => set('customer_type', v)}>
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="residential">Residential</SelectItem>
-                <SelectItem value="commercial">Commercial</SelectItem>
-              </SelectContent>
-            </Select>
+            <select
+              className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1A6E45]"
+              value={form.customer_type}
+              onChange={e => set('customer_type', e.target.value)}
+            >
+              <option value="residential">Residential</option>
+              <option value="commercial">Commercial</option>
+            </select>
           </div>
 
-          {/* Commercial fields */}
+          {/* Company name — commercial only */}
           {isCommercial && (
             <div>
               <Label className="text-xs">Company Name</Label>
               <Input
                 className="mt-1"
-                placeholder="Apex Property Management"
+                placeholder="Company Name"
                 value={form.company_name}
                 onChange={e => {
                   set('company_name', e.target.value);
@@ -108,19 +160,19 @@ export function NewCustomerDialog({ open, onClose }: Props) {
           {/* Name */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">{isCommercial ? 'Contact First Name' : 'First Name'}</Label>
+              <Label className="text-xs">{isCommercial ? 'Contact First Name' : 'First Name'}<span className="text-red-500">*</span></Label>
               <Input
                 className="mt-1"
-                placeholder="Linda"
+                placeholder="First Name"
                 value={form.first_name}
                 onChange={e => handleNameChange('first_name', e.target.value)}
               />
             </div>
             <div>
-              <Label className="text-xs">{isCommercial ? 'Contact Last Name' : 'Last Name'}</Label>
+              <Label className="text-xs">{isCommercial ? 'Contact Last Name' : 'Last Name'}<span className="text-red-500">*</span></Label>
               <Input
                 className="mt-1"
-                placeholder="Calloway"
+                placeholder="Last Name"
                 value={form.last_name}
                 onChange={e => handleNameChange('last_name', e.target.value)}
               />
@@ -134,7 +186,7 @@ export function NewCustomerDialog({ open, onClose }: Props) {
               <Input
                 className="mt-1"
                 type="email"
-                placeholder="linda@email.com"
+                placeholder="email@email.com"
                 value={form.email}
                 onChange={e => set('email', e.target.value)}
               />
@@ -143,35 +195,37 @@ export function NewCustomerDialog({ open, onClose }: Props) {
               <Label className="text-xs">Phone</Label>
               <Input
                 className="mt-1"
-                placeholder="(253) 555-0182"
+                placeholder="(999) 999-9999"
                 value={form.phone}
                 onChange={e => set('phone', e.target.value)}
               />
             </div>
           </div>
 
-          {/* Address */}
+          {/* Billing address */}
           <div>
-            <Label className="text-xs">Billing Street</Label>
+            <Label className="text-xs">
+              {isCommercial ? 'Billing Address' : 'Address'}<span className="text-red-500">*</span>
+            </Label>
             <Input
               className="mt-1"
-              placeholder="2847 Ridgewood Ct"
+              placeholder="Address 1"
               value={form.billing_street}
               onChange={e => set('billing_street', e.target.value)}
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-1">
-              <Label className="text-xs">City</Label>
+              <Label className="text-xs">City<span className="text-red-500">*</span></Label>
               <Input
                 className="mt-1"
-                placeholder="Tacoma"
+                placeholder="City"
                 value={form.billing_city}
                 onChange={e => set('billing_city', e.target.value)}
               />
             </div>
             <div>
-              <Label className="text-xs">State</Label>
+              <Label className="text-xs">State<span className="text-red-500">*</span></Label>
               <Input
                 className="mt-1"
                 placeholder="WA"
@@ -180,7 +234,7 @@ export function NewCustomerDialog({ open, onClose }: Props) {
               />
             </div>
             <div>
-              <Label className="text-xs">ZIP</Label>
+              <Label className="text-xs">ZIP<span className="text-red-500">*</span></Label>
               <Input
                 className="mt-1"
                 placeholder="98405"
@@ -189,6 +243,95 @@ export function NewCustomerDialog({ open, onClose }: Props) {
               />
             </div>
           </div>
+
+          {/* Commercial — service location */}
+          {isCommercial && (
+            <>
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold text-gray-700 mb-3">
+                  First Service Location
+                </p>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs">Location Name</Label>
+                    <Input
+                      className="mt-1"
+                      placeholder="Riverside Plaza"
+                      value={form.location_name}
+                      onChange={e => set('location_name', e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">On-site Contact</Label>
+                      <Input
+                        className="mt-1"
+                        placeholder="Maria Sanchez"
+                        value={form.location_contact_name}
+                        onChange={e => set('location_contact_name', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Contact Phone</Label>
+                      <Input
+                        className="mt-1"
+                        placeholder="(253) 555-0211"
+                        value={form.location_contact_phone}
+                        onChange={e => set('location_contact_phone', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Service Address</Label>
+                    <Input
+                      className="mt-1"
+                      placeholder="1200 Riverside Dr"
+                      value={form.location_street}
+                      onChange={e => set('location_street', e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-1">
+                      <Label className="text-xs">City</Label>
+                      <Input
+                        className="mt-1"
+                        placeholder="Tacoma"
+                        value={form.location_city}
+                        onChange={e => set('location_city', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">State</Label>
+                      <Input
+                        className="mt-1"
+                        placeholder="WA"
+                        value={form.location_state}
+                        onChange={e => set('location_state', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">ZIP</Label>
+                      <Input
+                        className="mt-1"
+                        placeholder="98407"
+                        value={form.location_zip}
+                        onChange={e => set('location_zip', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Access Notes (optional)</Label>
+                    <Textarea
+                      className="mt-1 min-h-[60px]"
+                      placeholder="Gate code 4821. Call Maria on arrival."
+                      value={form.access_notes}
+                      onChange={e => set('access_notes', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 mt-4">
@@ -196,7 +339,7 @@ export function NewCustomerDialog({ open, onClose }: Props) {
           <Button
             className="bg-[#1A6E45] hover:bg-[#145a38]"
             onClick={() => mutation.mutate()}
-            disabled={!form.display_name || mutation.isPending}
+            disabled={!canSubmit || mutation.isPending}
           >
             {mutation.isPending ? 'Creating...' : 'Create Customer'}
           </Button>

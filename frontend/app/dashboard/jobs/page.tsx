@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { jobsApi } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Briefcase, Plus } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
+import { Briefcase, Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { NewJobDialog } from '@/components/new-job-dialog';
 
 const statusColor: Record<string, string> = {
   estimate:    'bg-gray-100 text-gray-700',
@@ -20,6 +22,9 @@ const statusColor: Record<string, string> = {
 };
 
 export default function JobsPage() {
+  const router = useRouter();
+  const [showNew, setShowNew] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['jobs'],
     queryFn: () => jobsApi.list(),
@@ -34,7 +39,10 @@ export default function JobsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
           <p className="text-sm text-gray-500 mt-1">{jobs.length} total</p>
         </div>
-        <Button className="bg-[#1A6E45] hover:bg-[#145a38]">
+        <Button
+          className="bg-[#1A6E45] hover:bg-[#145a38]"
+          onClick={() => setShowNew(true)}
+        >
           <Plus size={16} className="mr-2" />
           New Job
         </Button>
@@ -49,10 +57,10 @@ export default function JobsPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {jobs.map((job: any) => (
-                <Link
+                <div
                   key={job.job_id}
-                  href={`/dashboard/jobs/${job.job_id}`}
-                  className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+                  onClick={() => router.push(`/dashboard/jobs/${job.job_id}`)}
+                  className="flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-9 h-9 rounded-lg bg-[#E8F5EE] flex items-center justify-center flex-shrink-0">
@@ -68,12 +76,14 @@ export default function JobsPage() {
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusColor[job.status] || 'bg-gray-100 text-gray-600'}`}>
                     {job.status.replace('_', ' ')}
                   </span>
-                </Link>
+                </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <NewJobDialog open={showNew} onClose={() => setShowNew(false)} />
     </div>
   );
 }
