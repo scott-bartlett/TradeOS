@@ -20,6 +20,7 @@ from app.database import get_db
 from app.models.supply_and_field import JobPhoto, PhotoType
 from app.models.job import Job
 from app.services import storage, ai_provider
+from pydantic import BaseModel
 
 router = APIRouter()
 
@@ -185,10 +186,13 @@ async def delete_photo(
     return {"message": "Photo deleted successfully"}
 
 @router.post("/analyze-and-generate/{job_id}")
+class AnalyzeRequest(BaseModel):
+    dictation: str = ""
+
 async def analyze_and_generate(
     job_id: str,
+    request: AnalyzeRequest,
     db: AsyncSession = Depends(get_db),
-    dictation: str = ""
 ):
     """
     Single endpoint that:

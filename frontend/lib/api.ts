@@ -61,9 +61,7 @@ export const photosApi = {
   delete: (photoId: string) =>
   api.delete(`/api/photos/${photoId}`).then(r => r.data),
   analyzeAndGenerate: (jobId: string, dictation: string = '') =>
-  api.post(`/api/photos/analyze-and-generate/${jobId}`, null, {
-    params: { dictation }
-  }).then(r => r.data),
+  api.post(`/api/photos/analyze-and-generate/${jobId}`, { dictation }).then(r => r.data),
 };
 
 // ── CHANGE ORDERS ─────────────────────────────────────────────────────────────
