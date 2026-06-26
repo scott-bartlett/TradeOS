@@ -27,6 +27,10 @@ export const jobsApi = {
     api.get(`/api/jobs/${jobId}/supply-items`).then(r => r.data),
   getFieldNotes: (jobId: string) =>
     api.get(`/api/jobs/${jobId}/field-notes`).then(r => r.data),
+  getDashboardSummary: () =>
+    api.get('/api/jobs/dashboard/summary').then(r => r.data),
+  generateFlags: () =>
+    api.post('/api/jobs/dashboard/flags').then(r => r.data),
 };
 
 // ── CUSTOMERS ─────────────────────────────────────────────────────────────────
