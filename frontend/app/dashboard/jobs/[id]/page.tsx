@@ -6,6 +6,7 @@ import { jobsApi, photosApi, changeOrdersApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Camera, FileText, AlertTriangle, Package } from 'lucide-react';
+import { PhotoUpload } from '@/components/photo-upload';
 
 const statusColor: Record<string, string> = {
   estimate:    'bg-gray-100 text-gray-700',
@@ -49,13 +50,8 @@ export default function JobDetailPage() {
     queryFn: () => jobsApi.getSupplyItems(jobId),
   });
 
-  if (isLoading) {
-    return <div className="p-6 text-sm text-gray-400">Loading job...</div>;
-  }
-
-  if (!job) {
-    return <div className="p-6 text-sm text-red-500">Job not found</div>;
-  }
+  if (isLoading) return <div className="p-6 text-sm text-gray-400">Loading job...</div>;
+  if (!job) return <div className="p-6 text-sm text-red-500">Job not found</div>;
 
   const photos = photosData?.photos || [];
   const fieldNotes = fieldNotesData?.notes || [];
@@ -94,6 +90,19 @@ export default function JobDetailPage() {
         {/* Left column */}
         <div className="col-span-2 space-y-5">
 
+          {/* Photos */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <Camera size={14} className="text-[#1A6E45]" />
+                  Photos {photos.length > 0 && `(${photos.length})`}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PhotoUpload jobId={jobId} photos={photos} />
+              </CardContent>
+            </Card>
+
           {/* Scope */}
           {job.scope_of_work && (
             <Card>
@@ -102,6 +111,51 @@ export default function JobDetailPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600 leading-relaxed">{job.scope_of_work}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* AI Analysis */}
+          {analysis && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <Camera size={14} className="text-[#1A6E45]" />
+                  Equipment Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  {[
+                    ['Manufacturer', analysis.manufacturer],
+                    ['Model',        analysis.model_number],
+                    ['Serial',       analysis.serial_number],
+                    ['Year',         analysis.manufacture_year],
+                    ['Refrigerant',  analysis.refrigerant],
+                    ['Tonnage',      analysis.tonnage],
+                    ['Voltage',      analysis.voltage],
+                    ['Condition',    analysis.condition],
+                  ].filter(([, v]) => v).map(([label, value]) => (
+                    <div key={label as string}>
+                      <p className="text-xs text-gray-400">{label}</p>
+                      <p className="text-sm font-medium text-gray-800">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                {analysis.flags?.length > 0 && (
+                  <div className="space-y-2 mt-3 pt-3 border-t border-gray-100">
+                    {analysis.flags.map((flag: any, i: number) => (
+                      <div key={i} className={`flex gap-2 p-2 rounded-lg text-xs ${
+                        flag.severity === 'critical' ? 'bg-red-50 text-red-700' :
+                        flag.severity === 'warning'  ? 'bg-amber-50 text-amber-700' :
+                        'bg-blue-50 text-blue-700'
+                      }`}>
+                        <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+                        {flag.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -136,51 +190,6 @@ export default function JobDetailPage() {
             </Card>
           )}
 
-          {/* AI Analysis */}
-          {analysis && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Camera size={14} className="text-[#1A6E45]" />
-                  Photo Analysis
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  {[
-                    ['Manufacturer', analysis.manufacturer],
-                    ['Model', analysis.model_number],
-                    ['Serial', analysis.serial_number],
-                    ['Year', analysis.manufacture_year],
-                    ['Refrigerant', analysis.refrigerant],
-                    ['Tonnage', analysis.tonnage],
-                    ['Voltage', analysis.voltage],
-                    ['Condition', analysis.condition],
-                  ].filter(([, v]) => v).map(([label, value]) => (
-                    <div key={label as string}>
-                      <p className="text-xs text-gray-400">{label}</p>
-                      <p className="text-sm font-medium text-gray-800">{value}</p>
-                    </div>
-                  ))}
-                </div>
-                {analysis.flags?.length > 0 && (
-                  <div className="space-y-2 mt-3 pt-3 border-t border-gray-100">
-                    {analysis.flags.map((flag: any, i: number) => (
-                      <div key={i} className={`flex gap-2 p-2 rounded-lg text-xs ${
-                        flag.severity === 'critical' ? 'bg-red-50 text-red-700' :
-                        flag.severity === 'warning'  ? 'bg-amber-50 text-amber-700' :
-                        'bg-blue-50 text-blue-700'
-                      }`}>
-                        <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
-                        {flag.message}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
           {/* Field Notes */}
           {fieldNotes.length > 0 && (
             <Card>
@@ -192,7 +201,9 @@ export default function JobDetailPage() {
                   {fieldNotes.map((note: any) => (
                     <div key={note.note_id} className="border-l-2 border-[#A8D5BC] pl-3">
                       <p className="text-xs text-gray-400 mb-1">
-                        {note.captured_at || new Date(note.created_at).toLocaleTimeString()}
+                        {note.captured_at
+                          ? new Date(note.captured_at).toLocaleTimeString()
+                          : new Date(note.created_at).toLocaleTimeString()}
                       </p>
                       <p className="text-sm text-gray-700">{note.note_text}</p>
                     </div>
@@ -255,36 +266,6 @@ export default function JobDetailPage() {
               ))}
             </CardContent>
           </Card>
-
-          {/* Photos */}
-          {photos.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-gray-700">
-                  Photos ({photos.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-2">
-                  {photos.map((photo: any) => (
-                    <a
-                      key={photo.photo_id}
-                      href={photo.public_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="aspect-square rounded-lg bg-gray-100 overflow-hidden hover:opacity-80 transition-opacity"
-                    >
-                      <img
-                        src={photo.public_url}
-                        alt="Job photo"
-                        className="w-full h-full object-cover"
-                      />
-                    </a>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Actions */}
           <Card>

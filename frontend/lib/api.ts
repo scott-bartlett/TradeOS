@@ -58,6 +58,8 @@ export const photosApi = {
     api.post(`/api/photos/analyze/${jobId}`).then(r => r.data),
   list: (jobId: string) =>
     api.get(`/api/photos/${jobId}`).then(r => r.data),
+  delete: (photoId: string) =>
+  api.delete(`/api/photos/${photoId}`).then(r => r.data),
 };
 
 // ── CHANGE ORDERS ─────────────────────────────────────────────────────────────

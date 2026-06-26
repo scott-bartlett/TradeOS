@@ -23,7 +23,7 @@ from app.services import storage, ai_provider
 
 router = APIRouter()
 
-ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "image/jpg"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 

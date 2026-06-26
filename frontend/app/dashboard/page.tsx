@@ -39,8 +39,8 @@ export default function DashboardPage() {
   const flags = flagsData?.flags || [];
 
   const openJobs = jobs.filter((j: any) =>
-    ['estimate', 'approved', 'scheduled', 'in_progress'].includes(j.status)).length;
-  const completedJobs = jobs.filter((j: any) => j.status === 'complete').length;
+  ['estimate', 'approved', 'scheduled', 'in_progress', 'invoiced'].includes(j.status)).length;
+  const completedJobs = jobs.filter((j: any) => j.status === 'complete' || j.status === 'paid').length;
   const sentInvoices = invoices.filter((i: any) => i.status === 'sent');
   const totalOutstanding = sentInvoices.reduce(
     (sum: number, i: any) => sum + (i.total_amount || 0), 0
@@ -386,4 +386,4 @@ export default function DashboardPage() {
       </div>
     </div>
   );
-}
+}F
