@@ -390,3 +390,97 @@ async def get_supply_items(
         ],
         "total": len(items)
     }
+@router.get("/dashboard/summary")
+async def get_dashboard_summary(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Aggregate business data for the dashboard AI flags.
+    Returns jobs, invoices, and patterns for Claude to analyze.
+    """
+    from app.models.invoice import Invoice
+    from datetime import datetime, timedelta
+
+    # Get all jobs
+    jobs_result = await db.execute(select(Job).order_by(Job.created_at.desc()))
+    jobs = jobs_result.scalars().all()
+
+    # Get all invoices
+    inv_result = await db.execute(select(Invoice).order_by(Invoice.created_at.desc()))
+    invoices = inv_result.scalars().all()
+
+    # Build summary data for AI
+    now = datetime.utcnow()
+
+    jobs_summary = [
+        {
+            "job_id": str(j.id),
+            "job_number": j.job_number,
+            "title": j.title,
+            "status": j.status.value,
+            "created_at": j.created_at.isoformat(),
+            "days_open": (now - j.created_at).days,
+            "quote_total": float(j.quote_total) if j.quote_total else None,
+            "estimated_hours": float(j.estimated_hours) if j.estimated_hours else None,
+            "actual_hours": float(j.actual_hours) if j.actual_hours else None,
+        }
+        for j in jobs
+    ]
+
+    invoices_summary = [
+        {
+            "invoice_id": str(i.id),
+            "invoice_number": i.invoice_number,
+            "status": i.status.value,
+            "total_amount": float(i.total_amount) if i.total_amount else 0,
+            "sent_at": i.sent_at.isoformat() if i.sent_at else None,
+            "due_date": i.due_date.isoformat() if i.due_date else None,
+            "days_outstanding": (now - i.sent_at).days if i.sent_at else None,
+        }
+        for i in invoices
+    ]
+
+    # Calculate patterns
+    paid_invoices = [i for i in invoices if i.status.value == "paid" and i.sent_at and i.paid_at]
+    avg_collection_days = (
+        sum((i.paid_at - i.sent_at).days for i in paid_invoices) / len(paid_invoices)
+        if paid_invoices else 11
+    )
+
+    completed_jobs = [j for j in jobs if j.actual_hours and j.estimated_hours]
+    avg_hour_drift = (
+        sum(float(j.actual_hours) - float(j.estimated_hours) for j in completed_jobs) / len(completed_jobs)
+        if completed_jobs else 0
+    )
+
+    return {
+        "jobs": jobs_summary,
+        "invoices": invoices_summary,
+        "patterns": {
+            "avg_collection_days": round(avg_collection_days, 1),
+            "avg_hour_drift": round(avg_hour_drift, 2),
+            "total_jobs": len(jobs),
+            "open_estimates": len([j for j in jobs if j.status.value == "estimate"]),
+            "overdue_invoices": len([i for i in invoices if i.status.value == "sent" and i.due_date and i.due_date < now]),
+        }
+    }
+@router.post("/dashboard/flags")
+async def generate_dashboard_flags_endpoint(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate AI-powered dashboard flags from business data.
+    Calls Claude to analyze patterns and return actionable flags.
+    """
+    from app.models.invoice import Invoice
+
+    # Get the summary data
+    summary = await get_dashboard_summary(db)
+
+    # Call AI
+    flags = await ai_provider.generate_dashboard_flags(summary)
+
+    return {
+        "flags": flags,
+        "generated_at": __import__('datetime').datetime.utcnow().isoformat()
+    }
