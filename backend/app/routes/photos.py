@@ -183,3 +183,76 @@ async def delete_photo(
     await db.commit()
 
     return {"message": "Photo deleted successfully"}
+
+@router.post("/analyze-and-generate/{job_id}")
+async def analyze_and_generate(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    dictation: str = ""
+):
+    """
+    Single endpoint that:
+    1. Analyzes equipment photos with Claude Vision
+    2. Generates supply list from analysis + dictation
+    Returns both results in one call.
+    """
+    from app.routes.jobs import generate_supply_list
+    from pydantic import BaseModel
+
+    # Step 1 — analyze photos
+    result = await db.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    photos_result = await db.execute(
+        select(JobPhoto).where(
+            JobPhoto.job_id == uuid.UUID(job_id),
+            JobPhoto.photo_type == PhotoType.equipment,
+        )
+    )
+    photos = photos_result.scalars().all()
+
+    if not photos:
+        raise HTTPException(status_code=404, detail="No equipment photos found. Upload photos first.")
+
+    # Analyze
+    primary_photo = photos[0]
+    analysis = await ai_provider.analyze_photo(primary_photo.public_url)
+    job.ai_analysis = analysis
+
+    for photo in photos:
+        photo.ai_analyzed = True
+    await db.commit()
+
+    # Step 2 — generate supply list
+    items = await ai_provider.generate_supply_list(
+        analysis=analysis,
+        dictation=dictation or job.scope_of_work or "",
+        vertical=job.vertical.value if job.vertical else "hvac"
+    )
+
+    # Save supply items
+    from app.models.supply_and_field import JobSupplyItem
+    for item in items:
+        supply_item = JobSupplyItem(
+            job_id=uuid.UUID(job_id),
+            sku=item.get("sku"),
+            description=item.get("description", ""),
+            quantity=item.get("quantity", 1),
+            unit=item.get("unit", "ea"),
+            unit_cost=item.get("estimated_unit_cost"),
+            source=item.get("source", "inferred"),
+            notes=item.get("notes"),
+            is_approved=False
+        )
+        db.add(supply_item)
+    await db.commit()
+
+    return {
+        "job_id": job_id,
+        "analysis": analysis,
+        "supply_items": len(items),
+        "items": items,
+        "message": "Analysis and supply list generated successfully"
+    }
