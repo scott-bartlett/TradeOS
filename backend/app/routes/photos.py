@@ -204,7 +204,6 @@ async def analyze_and_generate(
             unit=item.get("unit", "ea"),
             unit_cost=item.get("estimated_unit_cost"),
             source=item.get("source", "inferred"),
-            notes=item.get("notes"),
             is_approved=False
         )
         db.add(supply_item)
