@@ -189,7 +189,7 @@ async def analyze_and_generate(
 
     # Step 4 — generate supply list
     items = await ai_provider.generate_supply_list(
-        analysis=analysis,
+        equipment_data=analysis,
         dictation=request.dictation or job.scope_of_work or "",
         vertical=job.vertical.value if job.vertical else "hvac"
     )
