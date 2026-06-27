@@ -13,26 +13,65 @@ export const jobsApi = {
     api.get('/api/jobs/', { params: { status } }).then(r => r.data),
   get: (jobId: string) =>
     api.get(`/api/jobs/${jobId}`).then(r => r.data),
-  updateSupplyItem: (itemId: string, data: any) =>
-    api.patch(`/api/jobs/supply-items/${itemId}`, data).then(r => r.data),
-  deleteSupplyItem: (itemId: string) =>
-    api.delete(`/api/jobs/supply-items/${itemId}`).then(r => r.data),
-  addSupplyItem: (jobId: string, data: any) =>
-    api.post(`/api/jobs/${jobId}/supply-items/add`, data).then(r => r.data),
   create: (data: any) =>
     api.post('/api/jobs/', data).then(r => r.data),
   updateStatus: (jobId: string, status: string) =>
     api.patch(`/api/jobs/${jobId}/status`, { status }).then(r => r.data),
+
+  // Pricing — replaces setQuoteTotal for post-analysis updates
+  updatePricing: (jobId: string, data: {
+    estimated_hours?: number;
+    labor_rate?: number;
+    material_markup?: number;
+    quote_total?: number;
+    deposit_required?: number;
+  }) => api.patch(`/api/jobs/${jobId}/pricing`, data).then(r => r.data),
+
+  // Legacy — kept for compatibility
   setQuoteTotal: (jobId: string, data: any) =>
     api.patch(`/api/jobs/${jobId}/quote-total`, data).then(r => r.data),
-  generateSupplyList: (jobId: string, dictation: string) =>
-    api.post(`/api/jobs/${jobId}/supply-list`, { dictation }).then(r => r.data),
-  addFieldNote: (jobId: string, data: any) =>
-    api.post(`/api/jobs/${jobId}/field-note`, data).then(r => r.data),
+
+  // Quote
+  sendQuote: (jobId: string, data: {
+    customer_email: string;
+    quote_total: number;
+    estimated_hours?: number;
+    labor_rate?: number;
+    material_markup?: number;
+    notes?: string;
+  }) => api.post(`/api/jobs/${jobId}/send-quote`, data).then(r => r.data),
+
+  // Deposit
+  updateDeposit: (jobId: string, data: {
+    deposit_received: boolean;
+    deposit_required?: number;
+  }) => api.patch(`/api/jobs/${jobId}/deposit`, data).then(r => r.data),
+
+  // Purchase order
+  sendPO: (jobId: string) =>
+    api.post(`/api/jobs/${jobId}/send-po`).then(r => r.data),
+
+  // Supply items
   getSupplyItems: (jobId: string) =>
     api.get(`/api/jobs/${jobId}/supply-items`).then(r => r.data),
+  addSupplyItem: (jobId: string, data: any) =>
+    api.post(`/api/jobs/${jobId}/supply-items/add`, data).then(r => r.data),
+  updateSupplyItem: (itemId: string, data: any) =>
+    api.patch(`/api/jobs/supply-items/${itemId}`, data).then(r => r.data),
+  deleteSupplyItem: (itemId: string) =>
+    api.delete(`/api/jobs/supply-items/${itemId}`).then(r => r.data),
+
+  // Supply list generation
+  generateSupplyList: (jobId: string, dictation: string) =>
+    api.post(`/api/jobs/${jobId}/supply-list`, { dictation }).then(r => r.data),
+
+  // Field notes
+  addFieldNote: (jobId: string, data: any) =>
+    api.post(`/api/jobs/${jobId}/field-note`, data).then(r => r.data),
   getFieldNotes: (jobId: string) =>
     api.get(`/api/jobs/${jobId}/field-notes`).then(r => r.data),
+
+  // Dashboard
   getDashboardSummary: () =>
     api.get('/api/jobs/dashboard/summary').then(r => r.data),
   generateFlags: () =>
@@ -65,9 +104,9 @@ export const photosApi = {
   list: (jobId: string) =>
     api.get(`/api/photos/${jobId}`).then(r => r.data),
   delete: (photoId: string) =>
-  api.delete(`/api/photos/${photoId}`).then(r => r.data),
+    api.delete(`/api/photos/${photoId}`).then(r => r.data),
   analyzeAndGenerate: (jobId: string, dictation: string = '') =>
-  api.post(`/api/photos/analyze-and-generate/${jobId}`, { dictation }).then(r => r.data),
+    api.post(`/api/photos/analyze-and-generate/${jobId}`, { dictation }).then(r => r.data),
 };
 
 // ── CHANGE ORDERS ─────────────────────────────────────────────────────────────

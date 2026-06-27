@@ -5,8 +5,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobsApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { DollarSign, CheckCircle, TrendingUp, Clock } from 'lucide-react';
+import {
+  Calculator, Send, CheckCircle, ShoppingCart,
+  ChevronDown, ChevronUp, Lock, Unlock
+} from 'lucide-react';
 
 interface Props {
   jobId: string;
@@ -17,140 +19,343 @@ interface Props {
 export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
   const queryClient = useQueryClient();
 
-  const laborRate = job?.labor_rate || 110;
-  const estimatedHours = job?.estimated_hours || 0;
-  const markup = job?.material_markup || 30;
-
-  // Calculate material cost from supply items
-  const materialCost = supplyItems.reduce((sum, item) => {
-    return sum + ((item.unit_cost || 0) * (item.quantity || 1));
-  }, 0);
-
-  const materialWithMarkup = materialCost * (1 + markup / 100);
-  const laborCost = laborRate * estimatedHours;
-  const suggestedTotal = materialWithMarkup + laborCost;
-
-  const [customerPrice, setCustomerPrice] = useState(
-    job?.quote_total ? String(job.quote_total) : String(Math.round(suggestedTotal))
+  // Pricing fields
+  const [hours, setHours] = useState<string>(job.estimated_hours?.toString() || '');
+  const [rate, setRate] = useState<string>(job.labor_rate?.toString() || '110');
+  const [markup, setMarkup] = useState<string>(job.material_markup?.toString() || '30');
+  const [quoteTotalOverride, setQuoteTotalOverride] = useState<string>(
+    job.quote_total?.toString() || ''
   );
+  const [overriding, setOverriding] = useState(!!job.quote_total);
 
-  useEffect(() => {
-    if (!job?.quote_total && suggestedTotal > 0) {
-      setCustomerPrice(String(Math.round(suggestedTotal)));
-    }
-  }, [suggestedTotal, job?.quote_total]);
+  // Send quote form
+  const [showSendForm, setShowSendForm] = useState(false);
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [quoteNotes, setQuoteNotes] = useState('');
 
-  const margin = customerPrice
-    ? (((parseFloat(customerPrice) - materialCost - laborCost) / parseFloat(customerPrice)) * 100)
-    : 0;
+  // Deposit
+  const [depositAmount, setDepositAmount] = useState<string>(
+    job.deposit_required?.toString() || ''
+  );
+  const [depositReceived, setDepositReceived] = useState(job.deposit_received || false);
 
-  const mutation = useMutation({
-    mutationFn: () => jobsApi.setQuoteTotal(jobId, {
-      quote_total: parseFloat(customerPrice),
-      estimated_hours: estimatedHours,
-      labor_rate: laborRate,
-      material_markup: markup,
+  const invalidateJob = () => queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+
+  // ── Calculations ──────────────────────────────────────────────────────────
+
+  const supplyCost = supplyItems.reduce(
+    (sum, i) => sum + ((i.unit_cost || 0) * (i.quantity || 1)), 0
+  );
+  const markupPct = parseFloat(markup) || 0;
+  const supplyWithMarkup = supplyCost * (1 + markupPct / 100);
+  const laborCost = (parseFloat(hours) || 0) * (parseFloat(rate) || 0);
+  const suggestedTotal = supplyWithMarkup + laborCost;
+  const finalTotal = overriding && quoteTotalOverride
+    ? parseFloat(quoteTotalOverride) || suggestedTotal
+    : suggestedTotal;
+  const internalCost = supplyCost + laborCost;
+  const grossProfit = finalTotal - internalCost;
+  const marginPct = finalTotal > 0 ? (grossProfit / finalTotal) * 100 : 0;
+
+  const marginColor =
+    marginPct >= 30 ? 'text-green-600' :
+    marginPct >= 15 ? 'text-amber-500' :
+    'text-red-500';
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  const savePricingMutation = useMutation({
+    mutationFn: () => jobsApi.updatePricing(jobId, {
+      estimated_hours: parseFloat(hours) || undefined,
+      labor_rate: parseFloat(rate) || undefined,
+      material_markup: parseFloat(markup) || undefined,
+      quote_total: overriding ? parseFloat(quoteTotalOverride) || undefined : undefined,
+      deposit_required: parseFloat(depositAmount) || undefined,
+    }),
+    onSuccess: invalidateJob,
+  });
+
+  const sendQuoteMutation = useMutation({
+    mutationFn: () => jobsApi.sendQuote(jobId, {
+      customer_email: customerEmail,
+      quote_total: finalTotal,
+      estimated_hours: parseFloat(hours) || undefined,
+      labor_rate: parseFloat(rate) || undefined,
+      material_markup: parseFloat(markup) || undefined,
+      notes: quoteNotes || undefined,
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+      invalidateJob();
+      setShowSendForm(false);
     },
   });
 
-  const isSet = job?.quote_total && job.quote_total > 0;
+  const depositMutation = useMutation({
+    mutationFn: (received: boolean) => jobsApi.updateDeposit(jobId, {
+      deposit_received: received,
+      deposit_required: parseFloat(depositAmount) || undefined,
+    }),
+    onSuccess: (_, received) => {
+      setDepositReceived(received);
+      invalidateJob();
+    },
+  });
+
+  const sendPOMutation = useMutation({
+    mutationFn: () => jobsApi.sendPO(jobId),
+    onSuccess: invalidateJob,
+  });
+
+  const isQuoteSent = ['quoted', 'approved', 'scheduled', 'in_progress',
+                        'complete', 'invoiced', 'paid'].includes(job.status);
+  const isApproved = ['approved', 'scheduled', 'in_progress', 'complete',
+                       'invoiced', 'paid'].includes(job.status);
+  const poAlreadySent = supplyItems.some((i: any) => i.po_sent);
 
   return (
-    <Card className={isSet ? 'border-green-200' : 'border-[#A8D5BC]'}>
+    <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-          <DollarSign size={14} className="text-[#1A6E45]" />
+          <Calculator size={14} className="text-[#1A6E45]" />
           Quote Builder
-          {isSet && <CheckCircle size={14} className="text-green-500 ml-auto" />}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
 
-        {/* Cost breakdown */}
-        <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Materials ({supplyItems.length} items)</span>
-            <span className="font-medium text-gray-700">${materialCost.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Markup ({markup}%)</span>
-            <span className="font-medium text-gray-700">+${(materialWithMarkup - materialCost).toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500 flex items-center gap-1">
-              <Clock size={10} />
-              Labor ({estimatedHours}hrs @ ${laborRate}/hr)
-            </span>
-            <span className="font-medium text-gray-700">${laborCost.toFixed(2)}</span>
-          </div>
-          <div className="border-t border-gray-200 pt-2 flex justify-between text-xs">
-            <span className="font-semibold text-gray-700">Suggested Price</span>
-            <span className="font-bold text-[#1A6E45]">${Math.round(suggestedTotal).toLocaleString()}</span>
-          </div>
-        </div>
-
-        {/* Customer price input */}
-        <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1">
-            Customer Price
-          </label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-            <Input
-              type="number"
-              value={customerPrice}
-              onChange={e => setCustomerPrice(e.target.value)}
-              className="pl-7 text-lg font-bold"
-              placeholder="0.00"
-            />
+        {/* ── Pricing inputs ── */}
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500 font-medium">Est. Hours</label>
+              <input
+                type="number"
+                value={hours}
+                onChange={e => setHours(e.target.value)}
+                placeholder="0"
+                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500 font-medium">Rate $/hr</label>
+              <input
+                type="number"
+                value={rate}
+                onChange={e => setRate(e.target.value)}
+                placeholder="110"
+                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500 font-medium">Markup %</label>
+              <input
+                type="number"
+                value={markup}
+                onChange={e => setMarkup(e.target.value)}
+                placeholder="30"
+                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+              />
+            </div>
           </div>
         </div>
 
-        {/* Margin indicator */}
-        {parseFloat(customerPrice) > 0 && (
-          <div className={`flex items-center justify-between p-2 rounded-lg text-xs ${
-            margin >= 30 ? 'bg-green-50' :
-            margin >= 15 ? 'bg-amber-50' :
-            'bg-red-50'
-          }`}>
-            <div className="flex items-center gap-1">
-              <TrendingUp size={12} className={
-                margin >= 30 ? 'text-green-600' :
-                margin >= 15 ? 'text-amber-600' :
-                'text-red-600'
-              } />
-              <span className={
-                margin >= 30 ? 'text-green-700' :
-                margin >= 15 ? 'text-amber-700' :
-                'text-red-700'
-              }>
-                {margin.toFixed(1)}% margin
+        {/* ── Cost breakdown (internal only) ── */}
+        <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Internal Breakdown
+          </p>
+          {[
+            ['Materials (cost)', `$${supplyCost.toFixed(2)}`],
+            [`Materials + ${markup}% markup`, `$${supplyWithMarkup.toFixed(2)}`],
+            [`Labor (${hours || 0} hrs × $${rate}/hr)`, `$${laborCost.toFixed(2)}`],
+            ['Suggested Total', `$${suggestedTotal.toFixed(2)}`],
+          ].map(([label, value]) => (
+            <div key={label} className="flex justify-between">
+              <span className="text-xs text-gray-500">{label}</span>
+              <span className="text-xs font-medium text-gray-700">{value}</span>
+            </div>
+          ))}
+          <div className="border-t border-gray-200 pt-1.5 mt-1.5">
+            <div className="flex justify-between">
+              <span className="text-xs text-gray-500">Gross Profit</span>
+              <span className={`text-xs font-semibold ${marginColor}`}>
+                ${grossProfit.toFixed(2)} ({marginPct.toFixed(0)}%)
               </span>
             </div>
-            <span className="text-gray-500">
-              {margin >= 30 ? 'Healthy' : margin >= 15 ? 'Thin' : 'Below cost'}
-            </span>
+          </div>
+        </div>
+
+        {/* ── Quote total ── */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-gray-700">Customer Quote Total</label>
+            <button
+              onClick={() => setOverriding(!overriding)}
+              className="text-xs text-gray-400 hover:text-[#1A6E45] flex items-center gap-1"
+            >
+              {overriding ? <><Unlock size={11} /> Using override</> : <><Lock size={11} /> Use suggested</>}
+            </button>
+          </div>
+          {overriding ? (
+            <input
+              type="number"
+              value={quoteTotalOverride}
+              onChange={e => setQuoteTotalOverride(e.target.value)}
+              placeholder={suggestedTotal.toFixed(2)}
+              className="w-full px-3 py-2 text-sm font-semibold border-2 border-[#1A6E45] rounded-lg focus:outline-none"
+            />
+          ) : (
+            <div className="w-full px-3 py-2 text-sm font-semibold bg-[#E8F5EE] text-[#1A6E45] rounded-lg">
+              ${suggestedTotal.toFixed(2)}
+            </div>
+          )}
+        </div>
+
+        {/* ── Save pricing ── */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full text-xs"
+          onClick={() => savePricingMutation.mutate()}
+          disabled={savePricingMutation.isPending}
+        >
+          {savePricingMutation.isPending ? 'Saving...' : 'Save Pricing'}
+        </Button>
+
+        {/* ── Send Quote ── */}
+        <div className="border-t border-gray-100 pt-3">
+          {isQuoteSent ? (
+            <div className="flex items-center gap-2 py-2 px-3 bg-blue-50 rounded-lg">
+              <CheckCircle size={13} className="text-blue-500" />
+              <span className="text-xs text-blue-700 font-medium">
+                Quote sent {job.quote_sent_at
+                  ? new Date(job.quote_sent_at).toLocaleDateString()
+                  : ''}
+              </span>
+            </div>
+          ) : (
+            <>
+              {!showSendForm ? (
+                <Button
+                  size="sm"
+                  className="w-full bg-[#1A6E45] hover:bg-[#145a38] text-xs"
+                  onClick={() => setShowSendForm(true)}
+                >
+                  <Send size={12} className="mr-2" />
+                  Generate &amp; Send Quote
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    autoFocus
+                    type="email"
+                    value={customerEmail}
+                    onChange={e => setCustomerEmail(e.target.value)}
+                    placeholder="Customer email"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+                  />
+                  <textarea
+                    value={quoteNotes}
+                    onChange={e => setQuoteNotes(e.target.value)}
+                    placeholder="Optional notes for customer..."
+                    rows={2}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] resize-none"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-[#1A6E45] hover:bg-[#145a38] text-xs h-8"
+                      disabled={!customerEmail || sendQuoteMutation.isPending}
+                      onClick={() => sendQuoteMutation.mutate()}
+                    >
+                      {sendQuoteMutation.isPending ? 'Sending...' : 'Send Quote'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-8"
+                      onClick={() => setShowSendForm(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* ── Deposit ── */}
+        {isQuoteSent && (
+          <div className="border-t border-gray-100 pt-3 space-y-2">
+            <p className="text-xs font-semibold text-gray-700">Deposit</p>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={depositAmount}
+                onChange={e => setDepositAmount(e.target.value)}
+                placeholder="Amount $"
+                className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+              />
+            </div>
+            {depositReceived ? (
+              <div className="flex items-center gap-2 py-2 px-3 bg-green-50 rounded-lg">
+                <CheckCircle size={13} className="text-green-500" />
+                <span className="text-xs text-green-700 font-medium">Deposit received</span>
+                <button
+                  onClick={() => depositMutation.mutate(false)}
+                  className="ml-auto text-xs text-gray-400 hover:text-gray-600"
+                >
+                  Undo
+                </button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs border-green-200 text-green-700 hover:bg-green-50"
+                onClick={() => depositMutation.mutate(true)}
+                disabled={depositMutation.isPending}
+              >
+                {depositMutation.isPending ? 'Saving...' : 'Mark Deposit Received'}
+              </Button>
+            )}
           </div>
         )}
 
-        {/* Save button */}
-        <Button
-          className="w-full bg-[#1A6E45] hover:bg-[#145a38]"
-          onClick={() => mutation.mutate()}
-          disabled={!customerPrice || parseFloat(customerPrice) <= 0 || mutation.isPending}
-        >
-          {mutation.isPending ? 'Saving...' :
-           isSet ? 'Update Quote Total' : 'Set Quote Total'}
-        </Button>
-
-        {isSet && (
-          <p className="text-xs text-center text-green-600 font-medium">
-            Quote set at ${parseFloat(customerPrice).toLocaleString()} — ready to invoice
-          </p>
+        {/* ── Send Supply Order ── */}
+        {isQuoteSent && (
+          <div className="border-t border-gray-100 pt-3">
+            {!depositReceived ? (
+              <div className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                <Lock size={12} className="text-gray-400 flex-shrink-0" />
+                <span className="text-xs text-gray-400">
+                  Supply order locked until deposit received
+                </span>
+              </div>
+            ) : poAlreadySent ? (
+              <div className="flex items-center gap-2 py-2 px-3 bg-green-50 rounded-lg">
+                <CheckCircle size={13} className="text-green-500" />
+                <span className="text-xs text-green-700 font-medium">Supply order sent</span>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                className="w-full bg-[#1A6E45] hover:bg-[#145a38] text-xs"
+                onClick={() => sendPOMutation.mutate()}
+                disabled={sendPOMutation.isPending}
+              >
+                <ShoppingCart size={12} className="mr-2" />
+                {sendPOMutation.isPending ? 'Sending PO...' : 'Send Supply Order'}
+              </Button>
+            )}
+            {sendPOMutation.isSuccess && (
+              <p className="text-xs text-green-600 text-center mt-1">
+                ✓ {sendPOMutation.data?.message}
+              </p>
+            )}
+          </div>
         )}
+
       </CardContent>
     </Card>
   );

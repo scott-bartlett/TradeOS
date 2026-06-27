@@ -65,6 +65,9 @@ class Job(BaseModel):
     material_markup = Column(Numeric(5, 2),  default=30)   # %
     quote_total     = Column(Numeric(10, 2))               # customer-facing price
     internal_cost   = Column(Numeric(10, 2))               # our cost (never shown)
+    # Deposit
+    deposit_required  = Column(Numeric(10, 2))               # deposit amount Jamie sets
+    deposit_received  = Column(Boolean, default=False)        # flipped after QB confirms
 
     # Quote
     quote_number    = Column(String(50))

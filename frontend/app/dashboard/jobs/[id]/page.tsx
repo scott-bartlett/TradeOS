@@ -93,17 +93,17 @@ export default function JobDetailPage() {
         <div className="col-span-2 space-y-5">
 
           {/* Photos */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Camera size={14} className="text-[#1A6E45]" />
-                  Photos {photos.length > 0 && `(${photos.length})`}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PhotoUpload jobId={jobId} photos={photos} />
-              </CardContent>
-            </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <Camera size={14} className="text-[#1A6E45]" />
+                Photos {photos.length > 0 && `(${photos.length})`}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PhotoUpload jobId={jobId} photos={photos} />
+            </CardContent>
+          </Card>
 
           {/* Scope */}
           {job.scope_of_work && (
@@ -162,7 +162,7 @@ export default function JobDetailPage() {
             </Card>
           )}
 
-        {/* Supply List */}
+          {/* Supply List */}
           {supplyItems.length > 0 && (
             <SupplyList jobId={jobId} items={supplyItems} />
           )}
@@ -223,18 +223,17 @@ export default function JobDetailPage() {
         {/* Right column */}
         <div className="space-y-5">
 
-          {/* Job details */}
+          {/* Job details — hours removed, now lives in QuoteBuilder */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-gray-700">Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                ['Est. Hours',   job.estimated_hours  ? `${job.estimated_hours} hrs`  : null],
-                ['Actual Hours', job.actual_hours      ? `${job.actual_hours} hrs`     : null],
-                ['Labor Rate',   job.labor_rate        ? `$${job.labor_rate}/hr`       : null],
-                ['Markup',       job.material_markup   ? `${job.material_markup}%`     : null],
+                ['Actual Hours', job.actual_hours  ? `${job.actual_hours} hrs`  : null],
                 ['Created',      new Date(job.created_at).toLocaleDateString()],
+                ['Deposit',      job.deposit_required ? `$${job.deposit_required}` : null],
+                ['Deposit Rcvd', job.deposit_received ? '✓ Yes' : null],
               ].filter(([, v]) => v).map(([label, value]) => (
                 <div key={label as string} className="flex justify-between">
                   <span className="text-xs text-gray-400">{label}</span>
@@ -243,14 +242,15 @@ export default function JobDetailPage() {
               ))}
             </CardContent>
           </Card>
-          {/* Quote Builder */}
-            {supplyItems.length > 0 && (
-              <QuoteBuilder
-                jobId={jobId}
-                supplyItems={supplyItems}
-                job={job}
-              />
-            )}
+
+          {/* Quote Builder — always show once supply items exist */}
+          {supplyItems.length > 0 && (
+            <QuoteBuilder
+              jobId={jobId}
+              supplyItems={supplyItems}
+              job={job}
+            />
+          )}
 
           {/* Actions */}
           <Card>

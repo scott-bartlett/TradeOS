@@ -354,21 +354,32 @@ export function SupplyList({ jobId, items }: Props) {
             )}
 
             <div className="grid grid-cols-2 gap-2">
-              <input
-                id="add-item-qty"
-                type="number"
-                value={customQty}
-                onChange={e => setCustomQty(e.target.value)}
-                placeholder="Qty"
-                className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
-              />
-              <input
-                type="number"
-                value={customCost}
-                onChange={e => setCustomCost(e.target.value)}
-                placeholder="Unit cost $"
-                className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
-              />
+              <div className="space-y-1">
+                <label className="text-xs text-gray-500 font-medium px-1">Qty</label>
+                <input
+                  id="add-item-qty"
+                  type="number"
+                  value={customQty}
+                  onChange={e => setCustomQty(e.target.value)}
+                  placeholder="1"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-gray-500 font-medium px-1">Unit cost $</label>
+                <input
+                  type="number"
+                  value={customCost}
+                  onChange={e => setCustomCost(e.target.value)}
+                  placeholder="0.00"
+                  readOnly={!!customSku}
+                  className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none ${
+                    customSku
+                      ? 'border-gray-100 bg-gray-50 text-gray-500 cursor-default'
+                      : 'border-gray-200 focus:border-[#1A6E45]'
+                  }`}
+                />
+              </div>
             </div>
 
             <div className="flex gap-2">
