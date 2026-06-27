@@ -1,12 +1,13 @@
 'use client';
 
+import { SupplyList } from '@/components/supply-list';
 import { QuoteBuilder } from '@/components/quote-builder';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { jobsApi, photosApi, changeOrdersApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Camera, FileText, AlertTriangle, Package } from 'lucide-react';
+import { ArrowLeft, Camera, FileText, AlertTriangle } from 'lucide-react';
 import { PhotoUpload } from '@/components/photo-upload';
 
 const statusColor: Record<string, string> = {
@@ -161,34 +162,9 @@ export default function JobDetailPage() {
             </Card>
           )}
 
-          {/* Supply Items */}
+        {/* Supply List */}
           {supplyItems.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Package size={14} className="text-[#1A6E45]" />
-                  Supply List ({supplyItems.length} items)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1">
-                  {supplyItems.map((item: any) => (
-                    <div key={item.item_id} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-800 truncate">{item.description}</p>
-                        {item.sku && <p className="text-xs text-gray-400">{item.sku}</p>}
-                      </div>
-                      <div className="flex items-center gap-3 ml-3 flex-shrink-0">
-                        <span className="text-xs text-gray-500">{item.quantity} {item.unit}</span>
-                        {item.unit_cost && (
-                          <span className="text-xs font-medium text-gray-700">${item.unit_cost}</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <SupplyList jobId={jobId} items={supplyItems} />
           )}
 
           {/* Field Notes */}
