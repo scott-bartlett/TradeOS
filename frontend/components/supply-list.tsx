@@ -21,6 +21,7 @@ export function SupplyList({ jobId, items }: Props) {
   const [customQty, setCustomQty] = useState('1');
   const [customCost, setCustomCost] = useState('');
   const [approved, setApproved] = useState(items.some(i => i.is_approved));
+  const [filter, setFilter] = useState('');
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['supply-items', jobId] });
@@ -76,6 +77,13 @@ export function SupplyList({ jobId, items }: Props) {
 
   const isApproved = approved || items.every(i => i.is_approved);
 
+  const visibleItems = filter
+  ? items.filter(i =>
+      i.description.toLowerCase().includes(filter.toLowerCase()) ||
+      (i.sku && i.sku.toLowerCase().includes(filter.toLowerCase()))
+    )
+  : items;
+
   return (
     <Card className={isApproved ? 'border-green-200' : ''}>
       <CardHeader className="pb-2">
@@ -89,8 +97,29 @@ export function SupplyList({ jobId, items }: Props) {
       </CardHeader>
       <CardContent className="space-y-1">
 
+        {/* Filter */}
+        {items.length > 5 && (
+          <div className="relative mb-2">
+            <input
+              type="text"
+              value={filter}
+              placeholder="Filter items..."
+              className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] pr-8"
+              onChange={e => setFilter(e.target.value)}
+            />
+            {filter && (
+              <button
+                onClick={() => setFilter('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+              >
+                <X size={12} className="text-gray-400" />
+              </button>
+            )}
+          </div>
+)}
+
         {/* Item list */}
-        {items.map((item: any) => (
+        {visibleItems.map((item: any) => (
           <div
             key={item.item_id}
             className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 group"
