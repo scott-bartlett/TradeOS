@@ -20,8 +20,8 @@ export function SupplyList({ jobId, items }: Props) {
   const [customDesc, setCustomDesc] = useState('');
   const [customQty, setCustomQty] = useState('1');
   const [customCost, setCustomCost] = useState('');
-  const [approved, setApproved] = useState(items.some(i => i.is_approved));
   const [filter, setFilter] = useState('');
+  const [localApproved, setLocalApproved] = useState(false);
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['supply-items', jobId] });
@@ -50,7 +50,6 @@ export function SupplyList({ jobId, items }: Props) {
 
   const approveMutation = useMutation({
     mutationFn: async () => {
-      // Approve all items at once
       await Promise.all(
         items.map(item =>
           jobsApi.updateSupplyItem(item.item_id, { is_approved: true })
@@ -59,7 +58,7 @@ export function SupplyList({ jobId, items }: Props) {
     },
     onSuccess: () => {
       invalidate();
-      setApproved(true);
+      setLocalApproved(true);
     },
   });
 
@@ -71,18 +70,18 @@ export function SupplyList({ jobId, items }: Props) {
     setEditingQty(null);
   };
 
+  const isApproved = localApproved;
+
+  const visibleItems = filter
+    ? items.filter(i =>
+        i.description.toLowerCase().includes(filter.toLowerCase()) ||
+        (i.sku && i.sku.toLowerCase().includes(filter.toLowerCase()))
+      )
+    : items;
+
   const totalCost = items.reduce(
     (sum, i) => sum + ((i.unit_cost || 0) * (i.quantity || 1)), 0
   );
-
-  const isApproved = approved || items.every(i => i.is_approved);
-
-  const visibleItems = filter
-  ? items.filter(i =>
-      i.description.toLowerCase().includes(filter.toLowerCase()) ||
-      (i.sku && i.sku.toLowerCase().includes(filter.toLowerCase()))
-    )
-  : items;
 
   return (
     <Card className={isApproved ? 'border-green-200' : ''}>
@@ -99,7 +98,7 @@ export function SupplyList({ jobId, items }: Props) {
 
         {/* Filter */}
         {items.length > 5 && (
-          <div className="relative mb-2">
+          <div className="relative mb-3">
             <input
               type="text"
               value={filter}
@@ -116,7 +115,7 @@ export function SupplyList({ jobId, items }: Props) {
               </button>
             )}
           </div>
-)}
+        )}
 
         {/* Item list */}
         {visibleItems.map((item: any) => (
@@ -133,7 +132,6 @@ export function SupplyList({ jobId, items }: Props) {
               )}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {/* Editable quantity */}
               {editingQty === item.item_id ? (
                 <input
                   autoFocus
@@ -169,6 +167,13 @@ export function SupplyList({ jobId, items }: Props) {
             </div>
           </div>
         ))}
+
+        {/* No results */}
+        {filter && visibleItems.length === 0 && (
+          <p className="text-xs text-gray-400 text-center py-3">
+            No items match "{filter}"
+          </p>
+        )}
 
         {/* Add item */}
         {!showAdd ? (
