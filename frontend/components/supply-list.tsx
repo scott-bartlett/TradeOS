@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobsApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Package, X, Plus, CheckCircle } from 'lucide-react';
+import { Package, X, Plus, CheckCircle, Search } from 'lucide-react';
 
 interface Props {
   jobId: string;
@@ -22,6 +22,10 @@ export function SupplyList({ jobId, items }: Props) {
   const [customCost, setCustomCost] = useState('');
   const [filter, setFilter] = useState('');
   const [localApproved, setLocalApproved] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const descInputRef = useRef<HTMLInputElement>(null);
+  const searchResultsRef = useRef<HTMLDivElement>(null);
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['supply-items', jobId] });
@@ -45,6 +49,8 @@ export function SupplyList({ jobId, items }: Props) {
       setCustomQty('1');
       setCustomCost('');
       setShowAdd(false);
+      setSearchResults([]);
+      setShowSearchResults(false);
     },
   });
 
@@ -68,6 +74,47 @@ export function SupplyList({ jobId, items }: Props) {
       qtyMutation.mutate({ itemId, quantity: qty });
     }
     setEditingQty(null);
+  };
+
+  // Search existing items as user types in the description field
+  const handleDescChange = (value: string) => {
+    setCustomDesc(value);
+    if (value.trim().length >= 2) {
+      const matches = items.filter(i =>
+        i.description.toLowerCase().includes(value.toLowerCase()) ||
+        (i.sku && i.sku.toLowerCase().includes(value.toLowerCase()))
+      );
+      setSearchResults(matches);
+      setShowSearchResults(matches.length > 0);
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+  };
+
+  // Dismiss search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        searchResultsRef.current &&
+        !searchResultsRef.current.contains(e.target as Node) &&
+        descInputRef.current &&
+        !descInputRef.current.contains(e.target as Node)
+      ) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleCancelAdd = () => {
+    setShowAdd(false);
+    setCustomDesc('');
+    setCustomQty('1');
+    setCustomCost('');
+    setSearchResults([]);
+    setShowSearchResults(false);
   };
 
   const isApproved = localApproved;
@@ -182,18 +229,77 @@ export function SupplyList({ jobId, items }: Props) {
             className="w-full flex items-center gap-2 py-2 px-2 rounded-lg border border-dashed border-gray-200 hover:border-[#1A6E45] hover:bg-[#E8F5EE] transition-colors text-xs text-gray-400 hover:text-[#1A6E45] mt-2"
           >
             <Plus size={12} />
-            Add custom item
+            Add item
           </button>
         ) : (
           <div className="space-y-2 pt-2 border-t border-gray-100 mt-2">
-            <input
-              autoFocus
-              type="text"
-              value={customDesc}
-              onChange={e => setCustomDesc(e.target.value)}
-              placeholder="Item description"
-              className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
-            />
+
+            {/* Description with live search */}
+            <div className="relative">
+              <div className="relative">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  ref={descInputRef}
+                  autoFocus
+                  type="text"
+                  value={customDesc}
+                  onChange={e => handleDescChange(e.target.value)}
+                  onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+                  placeholder="Search or describe item..."
+                  className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+                />
+              </div>
+
+              {/* Search results dropdown */}
+              {showSearchResults && (
+                <div
+                  ref={searchResultsRef}
+                  className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden"
+                >
+                  <p className="text-xs text-gray-400 px-3 py-1.5 bg-gray-50 border-b border-gray-100">
+                    Already on your list
+                  </p>
+                  {searchResults.map(item => (
+                    <div
+                      key={item.item_id}
+                      className="flex items-center justify-between px-3 py-2 hover:bg-[#E8F5EE] cursor-pointer group/result"
+                      onClick={() => {
+                        // Scroll to the item in the list and close add form
+                        setShowSearchResults(false);
+                        setCustomDesc('');
+                        setShowAdd(false);
+                        // Briefly highlight by setting filter to the description
+                        setFilter(item.description);
+                        setTimeout(() => setFilter(''), 2000);
+                      }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-gray-700 truncate">
+                          {item.description}
+                        </p>
+                        {item.sku && (
+                          <p className="text-xs text-gray-400">{item.sku}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <span className="text-xs text-gray-400">
+                          {item.quantity} {item.unit}
+                        </span>
+                        <span className="text-xs text-[#1A6E45] opacity-0 group-hover/result:opacity-100">
+                          Already added ✓
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="px-3 py-2 border-t border-gray-100 bg-gray-50">
+                    <p className="text-xs text-gray-400">
+                      Not what you need? Fill in the details below to add a new item.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="number"
@@ -228,12 +334,7 @@ export function SupplyList({ jobId, items }: Props) {
                 size="sm"
                 variant="outline"
                 className="text-xs h-8"
-                onClick={() => {
-                  setShowAdd(false);
-                  setCustomDesc('');
-                  setCustomQty('1');
-                  setCustomCost('');
-                }}
+                onClick={handleCancelAdd}
               >
                 Cancel
               </Button>
