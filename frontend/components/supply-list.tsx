@@ -5,12 +5,23 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobsApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Package, X, Plus, CheckCircle, Search } from 'lucide-react';
+import { Package, X, Plus, CheckCircle, Search, Loader2 } from 'lucide-react';
+
+interface CatalogItem {
+  sku: string;
+  description: string;
+  category: string;
+  unit: string;
+  unit_cost: number | null;
+  customer_price: number | null;
+}
 
 interface Props {
   jobId: string;
   items: any[];
 }
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://tradeos-production-fd2f.up.railway.app';
 
 export function SupplyList({ jobId, items }: Props) {
   const queryClient = useQueryClient();
@@ -20,12 +31,18 @@ export function SupplyList({ jobId, items }: Props) {
   const [customDesc, setCustomDesc] = useState('');
   const [customQty, setCustomQty] = useState('1');
   const [customCost, setCustomCost] = useState('');
+  const [customUnit, setCustomUnit] = useState('ea');
+  const [customSku, setCustomSku] = useState('');
   const [filter, setFilter] = useState('');
   const [localApproved, setLocalApproved] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
+
+  // Catalog search state
+  const [catalogResults, setCatalogResults] = useState<CatalogItem[]>([]);
+  const [showCatalogResults, setShowCatalogResults] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const descInputRef = useRef<HTMLInputElement>(null);
-  const searchResultsRef = useRef<HTMLDivElement>(null);
+  const catalogDropdownRef = useRef<HTMLDivElement>(null);
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['supply-items', jobId] });
@@ -45,12 +62,7 @@ export function SupplyList({ jobId, items }: Props) {
     mutationFn: (data: any) => jobsApi.addSupplyItem(jobId, data),
     onSuccess: () => {
       invalidate();
-      setCustomDesc('');
-      setCustomQty('1');
-      setCustomCost('');
-      setShowAdd(false);
-      setSearchResults([]);
-      setShowSearchResults(false);
+      resetAddForm();
     },
   });
 
@@ -68,6 +80,17 @@ export function SupplyList({ jobId, items }: Props) {
     },
   });
 
+  const resetAddForm = () => {
+    setShowAdd(false);
+    setCustomDesc('');
+    setCustomQty('1');
+    setCustomCost('');
+    setCustomUnit('ea');
+    setCustomSku('');
+    setCatalogResults([]);
+    setShowCatalogResults(false);
+  };
+
   const handleQtyBlur = (itemId: string) => {
     const qty = parseFloat(editingQtyValue);
     if (!isNaN(qty) && qty > 0) {
@@ -76,46 +99,66 @@ export function SupplyList({ jobId, items }: Props) {
     setEditingQty(null);
   };
 
-  // Search existing items as user types in the description field
+  // Search catalog as user types
   const handleDescChange = (value: string) => {
     setCustomDesc(value);
-    if (value.trim().length >= 2) {
-      const matches = items.filter(i =>
-        i.description.toLowerCase().includes(value.toLowerCase()) ||
-        (i.sku && i.sku.toLowerCase().includes(value.toLowerCase()))
-      );
-      setSearchResults(matches);
-      setShowSearchResults(matches.length > 0);
-    } else {
-      setSearchResults([]);
-      setShowSearchResults(false);
+    setCustomSku('');
+
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    if (value.trim().length < 2) {
+      setCatalogResults([]);
+      setShowCatalogResults(false);
+      return;
     }
+
+    searchDebounceRef.current = setTimeout(async () => {
+      setCatalogLoading(true);
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/catalog?q=${encodeURIComponent(value.trim())}&limit=8`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setCatalogResults(data);
+          setShowCatalogResults(data.length > 0);
+        }
+      } catch {
+        // silently fail — user can still add custom item
+      } finally {
+        setCatalogLoading(false);
+      }
+    }, 300);
   };
 
-  // Dismiss search results when clicking outside
+  // User picks an item from the catalog dropdown
+  const handleCatalogSelect = (item: CatalogItem) => {
+    setCustomDesc(item.description);
+    setCustomSku(item.sku);
+    setCustomUnit(item.unit || 'ea');
+    setCustomCost(item.unit_cost ? String(item.unit_cost) : '');
+    setShowCatalogResults(false);
+    setCatalogResults([]);
+    setTimeout(() => {
+      document.getElementById('add-item-qty')?.focus();
+    }, 50);
+  };
+
+  // Dismiss catalog dropdown on outside click
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClick = (e: MouseEvent) => {
       if (
-        searchResultsRef.current &&
-        !searchResultsRef.current.contains(e.target as Node) &&
+        catalogDropdownRef.current &&
+        !catalogDropdownRef.current.contains(e.target as Node) &&
         descInputRef.current &&
         !descInputRef.current.contains(e.target as Node)
       ) {
-        setShowSearchResults(false);
+        setShowCatalogResults(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  const handleCancelAdd = () => {
-    setShowAdd(false);
-    setCustomDesc('');
-    setCustomQty('1');
-    setCustomCost('');
-    setSearchResults([]);
-    setShowSearchResults(false);
-  };
 
   const isApproved = localApproved;
 
@@ -215,14 +258,14 @@ export function SupplyList({ jobId, items }: Props) {
           </div>
         ))}
 
-        {/* No results */}
+        {/* No filter results */}
         {filter && visibleItems.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-3">
             No items match "{filter}"
           </p>
         )}
 
-        {/* Add item */}
+        {/* Add item form */}
         {!showAdd ? (
           <button
             onClick={() => setShowAdd(true)}
@@ -234,74 +277,85 @@ export function SupplyList({ jobId, items }: Props) {
         ) : (
           <div className="space-y-2 pt-2 border-t border-gray-100 mt-2">
 
-            {/* Description with live search */}
+            {/* Description with catalog search */}
             <div className="relative">
               <div className="relative">
-                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                {catalogLoading ? (
+                  <Loader2 size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                ) : (
+                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                )}
                 <input
                   ref={descInputRef}
                   autoFocus
                   type="text"
                   value={customDesc}
                   onChange={e => handleDescChange(e.target.value)}
-                  onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
-                  placeholder="Search or describe item..."
+                  onFocus={() => catalogResults.length > 0 && setShowCatalogResults(true)}
+                  placeholder="Search catalog or describe item..."
                   className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
                 />
               </div>
 
-              {/* Search results dropdown */}
-              {showSearchResults && (
+              {/* Catalog results dropdown */}
+              {showCatalogResults && catalogResults.length > 0 && (
                 <div
-                  ref={searchResultsRef}
-                  className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden"
+                  ref={catalogDropdownRef}
+                  className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
                 >
-                  <p className="text-xs text-gray-400 px-3 py-1.5 bg-gray-50 border-b border-gray-100">
-                    Already on your list
+                  <p className="text-xs text-gray-400 px-3 py-1.5 bg-gray-50 border-b border-gray-100 font-medium">
+                    Johnstone Supply catalog
                   </p>
-                  {searchResults.map(item => (
+                  {catalogResults.map(item => (
                     <div
-                      key={item.item_id}
-                      className="flex items-center justify-between px-3 py-2 hover:bg-[#E8F5EE] cursor-pointer group/result"
-                      onClick={() => {
-                        // Scroll to the item in the list and close add form
-                        setShowSearchResults(false);
-                        setCustomDesc('');
-                        setShowAdd(false);
-                        // Briefly highlight by setting filter to the description
-                        setFilter(item.description);
-                        setTimeout(() => setFilter(''), 2000);
+                      key={item.sku}
+                      className="flex items-center justify-between px-3 py-2 hover:bg-[#E8F5EE] cursor-pointer border-b border-gray-50 last:border-0"
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        handleCatalogSelect(item);
                       }}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-gray-700 truncate">
+                        <p className="text-xs font-medium text-gray-800 truncate">
                           {item.description}
                         </p>
-                        {item.sku && (
-                          <p className="text-xs text-gray-400">{item.sku}</p>
-                        )}
+                        <p className="text-xs text-gray-400">{item.sku} · {item.category}</p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                        <span className="text-xs text-gray-400">
-                          {item.quantity} {item.unit}
-                        </span>
-                        <span className="text-xs text-[#1A6E45] opacity-0 group-hover/result:opacity-100">
-                          Already added ✓
-                        </span>
+                      <div className="flex-shrink-0 ml-3 text-right">
+                        {item.unit_cost && (
+                          <p className="text-xs font-semibold text-[#1A6E45]">
+                            ${item.unit_cost}/{item.unit}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
-                  <div className="px-3 py-2 border-t border-gray-100 bg-gray-50">
+                  <div className="px-3 py-2 bg-gray-50 border-t border-gray-100">
                     <p className="text-xs text-gray-400">
-                      Not what you need? Fill in the details below to add a new item.
+                      Not what you need? Enter description and add as custom.
                     </p>
                   </div>
                 </div>
               )}
             </div>
 
+            {/* SKU badge when catalog item selected */}
+            {customSku && (
+              <div className="flex items-center gap-2 px-2 py-1 bg-[#E8F5EE] rounded-lg">
+                <CheckCircle size={11} className="text-[#1A6E45] flex-shrink-0" />
+                <span className="text-xs text-[#1A6E45] font-medium">{customSku}</span>
+                <button
+                  onClick={() => setCustomSku('')}
+                  className="ml-auto text-gray-400 hover:text-gray-600"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
               <input
+                id="add-item-qty"
                 type="number"
                 value={customQty}
                 onChange={e => setCustomQty(e.target.value)}
@@ -316,6 +370,7 @@ export function SupplyList({ jobId, items }: Props) {
                 className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
               />
             </div>
+
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -323,9 +378,10 @@ export function SupplyList({ jobId, items }: Props) {
                 disabled={!customDesc || addMutation.isPending}
                 onClick={() => addMutation.mutate({
                   description: customDesc,
+                  sku: customSku || undefined,
                   quantity: parseFloat(customQty) || 1,
                   unit_cost: customCost ? parseFloat(customCost) : null,
-                  unit: 'ea',
+                  unit: customUnit,
                 })}
               >
                 {addMutation.isPending ? 'Adding...' : 'Add Item'}
@@ -334,7 +390,7 @@ export function SupplyList({ jobId, items }: Props) {
                 size="sm"
                 variant="outline"
                 className="text-xs h-8"
-                onClick={handleCancelAdd}
+                onClick={resetAddForm}
               >
                 Cancel
               </Button>

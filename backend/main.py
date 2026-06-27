@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import health, jobs, photos, customers, invoices, change_orders, users, van_inventory
+from app.routes import health, jobs, photos, customers, invoices, change_orders, users, van_inventory, catalog
 
 app = FastAPI(
     title="TradeOS API",
@@ -24,6 +24,7 @@ app.include_router(invoices.router,      prefix="/api/invoices",      tags=["inv
 app.include_router(change_orders.router, prefix="/api/change-orders", tags=["change-orders"])
 app.include_router(users.router,         prefix="/api/users",         tags=["users"])
 app.include_router(van_inventory.router, prefix="/api/van-inventory", tags=["van-inventory"])
+app.include_router(catalog.router,       prefix="/api/catalog",       tags=["catalog"])
 
 @app.get("/")
 def root():

@@ -1,4 +1,5 @@
 # Import all models explicitly so Alembic can find them
+from app.models.catalog import CatalogItem
 from app.models.base import BaseModel
 from app.models.user import User, UserRole
 from app.models.customer import Customer, ServiceLocation, CustomerType
