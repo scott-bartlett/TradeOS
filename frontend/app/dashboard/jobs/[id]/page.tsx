@@ -1,5 +1,6 @@
 'use client';
 
+import { QuoteBuilder } from '@/components/quote-builder';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { jobsApi, photosApi, changeOrdersApi } from '@/lib/api';
@@ -266,6 +267,14 @@ export default function JobDetailPage() {
               ))}
             </CardContent>
           </Card>
+          {/* Quote Builder */}
+            {supplyItems.length > 0 && (
+              <QuoteBuilder
+                jobId={jobId}
+                supplyItems={supplyItems}
+                job={job}
+              />
+            )}
 
           {/* Actions */}
           <Card>

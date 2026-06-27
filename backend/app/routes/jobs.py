@@ -484,3 +484,74 @@ async def generate_dashboard_flags_endpoint(
         "flags": flags,
         "generated_at": __import__('datetime').datetime.utcnow().isoformat()
     }
+class SupplyItemUpdate(BaseModel):
+    quantity: Optional[float] = None
+    is_approved: Optional[bool] = None
+    unit_cost: Optional[float] = None
+
+@router.patch("/supply-items/{item_id}")
+async def update_supply_item(
+    item_id: str,
+    data: SupplyItemUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a supply item — quantity, approval status, or cost."""
+    from app.models.supply_and_field import JobSupplyItem
+    result = await db.execute(
+        select(JobSupplyItem).where(JobSupplyItem.id == uuid.UUID(item_id))
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Supply item not found")
+
+    for field, value in data.model_dump(exclude_none=True).items():
+        setattr(item, field, value)
+
+    await db.commit()
+    return {"item_id": item_id, "message": "Supply item updated"}
+
+
+@router.delete("/supply-items/{item_id}")
+async def delete_supply_item(
+    item_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Remove a supply item from a job."""
+    from app.models.supply_and_field import JobSupplyItem
+    result = await db.execute(
+        select(JobSupplyItem).where(JobSupplyItem.id == uuid.UUID(item_id))
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Supply item not found")
+
+    await db.delete(item)
+    await db.commit()
+    return {"message": "Supply item removed"}
+
+
+@router.post("/{job_id}/supply-items/add")
+async def add_supply_item(
+    job_id: str,
+    data: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    """Add a custom supply item to a job."""
+    from app.models.supply_and_field import JobSupplyItem
+    item = JobSupplyItem(
+        job_id=uuid.UUID(job_id),
+        sku=data.get("sku"),
+        description=data.get("description", ""),
+        quantity=data.get("quantity", 1),
+        unit=data.get("unit", "ea"),
+        unit_cost=data.get("unit_cost"),
+        source="manual",
+        is_approved=True
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return {
+        "item_id": str(item.id),
+        "message": "Supply item added"
+    }
