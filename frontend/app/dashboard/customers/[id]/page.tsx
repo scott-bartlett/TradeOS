@@ -11,6 +11,7 @@ import {
   Pencil, Plus, Check, X, ChevronRight, Briefcase
 } from 'lucide-react';
 import { StateSelect, ZipInput } from '@/components/address-inputs';
+import { formatDate, formatDateTime } from '@/lib/date-utils';
 
 const statusColor: Record<string, string> = {
   estimate:    'bg-gray-100 text-gray-600',
@@ -395,7 +396,7 @@ export default function CustomerDetailPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-800 truncate">{job.title}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          {job.job_number} · {new Date(job.created_at).toLocaleDateString()}
+                          {job.job_number} · {formatDate(job.created_at)}
                           {job.quote_total && ` · $${Number(job.quote_total).toLocaleString()}`}
                         </p>
                       </div>
@@ -436,7 +437,7 @@ export default function CustomerDetailPage() {
               {[
                 ['Type',  customer.customer_type],
                 ['QB ID', customer.quickbooks_id || 'Not synced'],
-                ['Since', new Date(customer.created_at).toLocaleDateString()],
+                ['Since', formatDate(customer.created_at)],
                 ['Jobs',  jobs.length ? `${jobs.length} total` : '0'],
               ].map(([label, value]) => (
                 <div key={label as string} className="flex justify-between">

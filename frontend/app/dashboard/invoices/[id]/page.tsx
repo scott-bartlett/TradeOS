@@ -7,6 +7,7 @@ import { invoicesApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle, Circle, Send, DollarSign, Package, Wrench } from 'lucide-react';
+import { formatDate, formatDateTime } from '@/lib/date-utils';
 
 const checklistItems = [
   { key: 'review_lines_verified',    label: 'Line items match approved quote and change orders' },
@@ -100,7 +101,7 @@ export default function InvoiceDetailPage() {
           <p className="text-sm text-gray-400 mt-0.5">
             {invoice.job_title && `${invoice.job_title} · `}
             {invoice.sent_at
-              ? `Sent ${new Date(invoice.sent_at).toLocaleDateString()}`
+              ? `Sent ${formatDate(invoice.sent_at)}`
               : 'Draft — pending review'}
           </p>
         </div>
@@ -280,7 +281,7 @@ export default function InvoiceDetailPage() {
                   <div>
                     <p className="text-sm font-semibold text-blue-700">Invoice Sent</p>
                     <p className="text-xs text-blue-500">
-                      {invoice.sent_at && `${new Date(invoice.sent_at).toLocaleString()}`}
+                      {invoice.sent_at && formatDateTime(invoice.sent_at)}
                     </p>
                   </div>
                 </div>
@@ -297,7 +298,7 @@ export default function InvoiceDetailPage() {
                   <div>
                     <p className="text-sm font-semibold text-green-700">Paid in Full</p>
                     <p className="text-xs text-green-500">
-                      {invoice.paid_at && `${new Date(invoice.paid_at).toLocaleString()}`}
+                      {invoice.paid_at && formatDateTime(invoice.paid_at)}
                     </p>
                   </div>
                 </div>
@@ -319,7 +320,7 @@ export default function InvoiceDetailPage() {
                 ['Total',       `$${(invoice.total_amount || 0).toLocaleString()}`],
                 ['Amount Paid', invoice.amount_paid > 0 ? `$${invoice.amount_paid.toLocaleString()}` : null],
                 ['Balance Due', invoice.balance_due != null ? `$${invoice.balance_due.toLocaleString()}` : null],
-                ['Due Date',    invoice.due_date ? new Date(invoice.due_date).toLocaleDateString() : null],
+                ['Due Date',    invoice.due_date ? formatDate(invoice.due_date) : null],
                 ['QB Synced',   invoice.quickbooks_invoice_id ? '✓ Yes' : 'Pending'],
               ].filter(([, v]) => v).map(([label, value]) => (
                 <div key={label as string} className="flex justify-between">

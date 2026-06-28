@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Camera, FileText, AlertTriangle } from 'lucide-react';
 import { PhotoUpload } from '@/components/photo-upload';
+import { formatDate } from '@/lib/date-utils';
 
 const statusColor: Record<string, string> = {
   estimate:    'bg-gray-100 text-gray-700',
@@ -231,7 +232,7 @@ export default function JobDetailPage() {
             <CardContent className="space-y-3">
               {[
                 ['Actual Hours', job.actual_hours  ? `${job.actual_hours} hrs`  : null],
-                ['Created',      new Date(job.created_at).toLocaleDateString()],
+                ['Created',      formatDate(job.created_at)],
                 ['Deposit',      job.deposit_required ? `$${job.deposit_required}` : null],
                 ['Deposit Rcvd', job.deposit_received ? '✓ Yes' : null],
               ].filter(([, v]) => v).map(([label, value]) => (

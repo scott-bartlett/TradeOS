@@ -9,6 +9,7 @@ import {
   Calculator, Send, CheckCircle, ShoppingCart,
   ChevronDown, ChevronUp, Lock, Unlock
 } from 'lucide-react';
+import { formatDate } from '@/lib/date-utils';
 
 interface Props {
   jobId: string;
@@ -227,9 +228,7 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
             <div className="flex items-center gap-2 py-2 px-3 bg-blue-50 rounded-lg">
               <CheckCircle size={13} className="text-blue-500" />
               <span className="text-xs text-blue-700 font-medium">
-                Quote sent {job.quote_sent_at
-                  ? new Date(job.quote_sent_at).toLocaleDateString()
-                  : ''}
+                Quote sent {job.quote_sent_at ? formatDate(job.quote_sent_at) : ''}
               </span>
             </div>
           ) : (

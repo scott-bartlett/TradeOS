@@ -6,6 +6,7 @@ import { customersApi } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Building2, Home, Plus, Search, X } from 'lucide-react';
+import { formatDate } from '@/lib/date-utils';
 import { useRouter } from 'next/navigation';
 import { NewCustomerDialog } from '@/components/new-customer-dialog';
 

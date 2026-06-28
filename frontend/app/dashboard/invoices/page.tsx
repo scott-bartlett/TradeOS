@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { invoicesApi } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { DollarSign, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { formatDate } from '@/lib/date-utils';
 import { useRouter } from 'next/navigation';
 
 const statusColor: Record<string, string> = {
@@ -151,9 +152,9 @@ export default function InvoicesPage() {
                         <p className="text-sm font-semibold text-gray-900">{inv.invoice_number}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
                           {inv.sent_at
-                            ? `Sent ${new Date(inv.sent_at).toLocaleDateString()}`
-                            : `Created ${new Date(inv.created_at).toLocaleDateString()}`}
-                          {inv.due_date && ` · Due ${new Date(inv.due_date).toLocaleDateString()}`}
+                          ? `Sent ${formatDate(inv.sent_at)}`
+                          : `Created ${formatDate(inv.created_at)}`}
+                        {inv.due_date && ` · Due ${formatDate(inv.due_date)}`}
                         </p>
                       </div>
                     </div>
