@@ -434,17 +434,29 @@ export default function CustomerDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                ['Type',    customer.customer_type],
-                ['Status',  customer.is_active ? 'Active' : 'Inactive'],
-                ['QB ID',   customer.quickbooks_id || 'Not synced'],
-                ['Since',   new Date(customer.created_at).toLocaleDateString()],
-                ['Jobs',    jobs.length ? `${jobs.length} total` : '0'],
+                ['Type',  customer.customer_type],
+                ['QB ID', customer.quickbooks_id || 'Not synced'],
+                ['Since', new Date(customer.created_at).toLocaleDateString()],
+                ['Jobs',  jobs.length ? `${jobs.length} total` : '0'],
               ].map(([label, value]) => (
                 <div key={label as string} className="flex justify-between">
                   <span className="text-xs text-gray-400">{label}</span>
                   <span className="text-xs font-medium text-gray-700 capitalize">{value}</span>
                 </div>
               ))}
+              <div className="pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => updateMutation.mutate({ is_active: !customer.is_active })}
+                  disabled={updateMutation.isPending}
+                  className={`w-full text-xs font-medium py-1.5 rounded-lg border transition-colors ${
+                    customer.is_active
+                      ? 'border-red-200 text-red-600 hover:bg-red-50'
+                      : 'border-green-200 text-green-600 hover:bg-green-50'
+                  }`}
+                >
+                  {customer.is_active ? 'Mark Inactive' : 'Mark Active'}
+                </button>
+              </div>
             </CardContent>
           </Card>
 
