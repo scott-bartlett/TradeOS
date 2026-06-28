@@ -7,6 +7,7 @@ Customer and service location management.
   GET  /api/customers/                              — list all customers
   GET  /api/customers/{customer_id}                 — get customer detail
   PATCH /api/customers/{customer_id}                — update customer
+  GET  /api/customers/{customer_id}/jobs            — get jobs for customer
   POST /api/customers/{customer_id}/locations       — add service location
   GET  /api/customers/{customer_id}/locations       — list service locations
   PATCH /api/customers/locations/{location_id}      — update service location
@@ -91,7 +92,6 @@ async def create_customer(
     data: CustomerCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a new customer. Works for both residential and commercial."""
     customer = Customer(
         customer_type=CustomerType(data.customer_type),
         company_name=data.company_name,
@@ -128,9 +128,7 @@ async def list_customers(
     active_only: bool = True,
     db: AsyncSession = Depends(get_db)
 ):
-    """List all customers, optionally filtered by type or status."""
     query = select(Customer).order_by(Customer.display_name)
-
     if customer_type:
         query = query.where(Customer.customer_type == CustomerType(customer_type))
     if active_only:
@@ -165,7 +163,6 @@ async def get_customer(
     customer_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get full customer detail including service locations."""
     result = await db.execute(
         select(Customer).where(Customer.id == uuid.UUID(customer_id))
     )
@@ -173,7 +170,6 @@ async def get_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    # Get service locations
     locs_result = await db.execute(
         select(ServiceLocation)
         .where(ServiceLocation.customer_id == uuid.UUID(customer_id))
@@ -217,6 +213,40 @@ async def get_customer(
     }
 
 
+# ── GET CUSTOMER JOBS ─────────────────────────────────────────────────────────
+
+@router.get("/{customer_id}/jobs")
+async def get_customer_jobs(
+    customer_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all jobs for a customer, ordered most recent first."""
+    from app.models.job import Job
+    result = await db.execute(
+        select(Job)
+        .where(Job.customer_id == uuid.UUID(customer_id))
+        .order_by(Job.created_at.desc())
+    )
+    jobs = result.scalars().all()
+
+    return {
+        "customer_id": customer_id,
+        "jobs": [
+            {
+                "job_id": str(j.id),
+                "job_number": j.job_number,
+                "title": j.title,
+                "status": j.status,
+                "vertical": j.vertical,
+                "quote_total": float(j.quote_total) if j.quote_total else None,
+                "created_at": j.created_at.isoformat(),
+            }
+            for j in jobs
+        ],
+        "total": len(jobs)
+    }
+
+
 # ── UPDATE CUSTOMER ───────────────────────────────────────────────────────────
 
 @router.patch("/{customer_id}")
@@ -225,7 +255,6 @@ async def update_customer(
     data: CustomerUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Update customer fields. Only provided fields are updated."""
     result = await db.execute(
         select(Customer).where(Customer.id == uuid.UUID(customer_id))
     )
@@ -237,11 +266,7 @@ async def update_customer(
         setattr(customer, field, value)
 
     await db.commit()
-
-    return {
-        "customer_id": customer_id,
-        "message": "Customer updated successfully"
-    }
+    return {"customer_id": customer_id, "message": "Customer updated successfully"}
 
 
 # ── ADD SERVICE LOCATION ──────────────────────────────────────────────────────
@@ -252,15 +277,10 @@ async def add_service_location(
     data: ServiceLocationCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Add a service location to a customer.
-    Residential customers typically have one. Commercial can have many.
-    """
     result = await db.execute(
         select(Customer).where(Customer.id == uuid.UUID(customer_id))
     )
-    customer = result.scalar_one_or_none()
-    if not customer:
+    if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Customer not found")
 
     location = ServiceLocation(
@@ -296,7 +316,6 @@ async def list_service_locations(
     customer_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """List all service locations for a customer."""
     result = await db.execute(
         select(ServiceLocation)
         .where(ServiceLocation.customer_id == uuid.UUID(customer_id))
@@ -333,7 +352,6 @@ async def update_service_location(
     data: ServiceLocationUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    """Update a service location. Useful when a property changes hands."""
     result = await db.execute(
         select(ServiceLocation).where(ServiceLocation.id == uuid.UUID(location_id))
     )
@@ -345,8 +363,4 @@ async def update_service_location(
         setattr(location, field, value)
 
     await db.commit()
-
-    return {
-        "location_id": location_id,
-        "message": "Service location updated successfully"
-    }
+    return {"location_id": location_id, "message": "Service location updated successfully"}

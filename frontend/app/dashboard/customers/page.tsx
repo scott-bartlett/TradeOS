@@ -5,13 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 import { customersApi } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Building2, Home, Plus } from 'lucide-react';
+import { Building2, Home, Plus, Search, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { NewCustomerDialog } from '@/components/new-customer-dialog';
 
 export default function CustomersPage() {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
+  const [search, setSearch] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['customers'],
@@ -19,6 +20,15 @@ export default function CustomersPage() {
   });
 
   const customers = data?.customers || [];
+
+  const filtered = search.trim()
+    ? customers.filter((c: any) =>
+        c.display_name.toLowerCase().includes(search.toLowerCase()) ||
+        c.email?.toLowerCase().includes(search.toLowerCase()) ||
+        c.phone?.includes(search) ||
+        c.billing_city?.toLowerCase().includes(search.toLowerCase())
+      )
+    : customers;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -36,15 +46,37 @@ export default function CustomersPage() {
         </Button>
       </div>
 
+      {/* Search */}
+      <div className="relative mb-4">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search by name, email, phone, or city..."
+          className="w-full pl-9 pr-9 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2"
+          >
+            <X size={13} className="text-gray-400" />
+          </button>
+        )}
+      </div>
+
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="py-12 text-center text-sm text-gray-400">Loading customers...</div>
-          ) : customers.length === 0 ? (
-            <div className="py-12 text-center text-sm text-gray-400">No customers yet</div>
+          ) : filtered.length === 0 ? (
+            <div className="py-12 text-center text-sm text-gray-400">
+              {search ? `No customers match "${search}"` : 'No customers yet'}
+            </div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {customers.map((customer: any) => (
+              {filtered.map((customer: any) => (
                 <div
                   key={customer.customer_id}
                   onClick={() => router.push(`/dashboard/customers/${customer.customer_id}`)}

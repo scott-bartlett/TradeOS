@@ -86,8 +86,14 @@ export const customersApi = {
     api.get(`/api/customers/${customerId}`).then(r => r.data),
   create: (data: any) =>
     api.post('/api/customers/', data).then(r => r.data),
+  update: (customerId: string, data: any) =>
+    api.patch(`/api/customers/${customerId}`, data).then(r => r.data),
+  getJobs: (customerId: string) =>
+    api.get(`/api/customers/${customerId}/jobs`).then(r => r.data),
   addLocation: (customerId: string, data: any) =>
     api.post(`/api/customers/${customerId}/locations`, data).then(r => r.data),
+  updateLocation: (locationId: string, data: any) =>
+    api.patch(`/api/customers/locations/${locationId}`, data).then(r => r.data),
 };
 
 // ── PHOTOS ────────────────────────────────────────────────────────────────────

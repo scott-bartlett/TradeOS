@@ -23,9 +23,6 @@ export function NewJobDialog({ open, onClose }: Props) {
     title: '',
     vertical: 'hvac',
     scope_of_work: '',
-    estimated_hours: '',
-    labor_rate: '110',
-    material_markup: '30',
   });
 
   const { data: customersData } = useQuery({
@@ -36,7 +33,6 @@ export function NewJobDialog({ open, onClose }: Props) {
 
   const customers = customersData?.customers || [];
 
-  // Fetch locations when customer changes
   useEffect(() => {
     if (!selectedCustomerId) {
       setLocations([]);
@@ -56,14 +52,13 @@ export function NewJobDialog({ open, onClose }: Props) {
       service_location_id: selectedLocationId,
       vertical: form.vertical,
       scope_of_work: form.scope_of_work || null,
-      estimated_hours: form.estimated_hours ? parseFloat(form.estimated_hours) : null,
-      labor_rate: parseFloat(form.labor_rate),
-      material_markup: parseFloat(form.material_markup),
+      labor_rate: 110,
+      material_markup: 30,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] });
       onClose();
-      setForm({ title: '', vertical: 'hvac', scope_of_work: '', estimated_hours: '', labor_rate: '110', material_markup: '30' });
+      setForm({ title: '', vertical: 'hvac', scope_of_work: '' });
       setSelectedCustomerId('');
       setSelectedLocationId('');
       setLocations([]);
@@ -77,7 +72,7 @@ export function NewJobDialog({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>New Job</DialogTitle>
         </DialogHeader>
@@ -154,44 +149,10 @@ export function NewJobDialog({ open, onClose }: Props) {
             <Label className="text-xs">Scope of Work (optional)</Label>
             <Textarea
               className="mt-1 min-h-[80px]"
-              placeholder="Describe the work to be done..."
+              placeholder="Brief description of the work to be done..."
               value={form.scope_of_work}
               onChange={e => set('scope_of_work', e.target.value)}
             />
-          </div>
-
-          {/* Hours + rates */}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <Label className="text-xs">Est. Hours</Label>
-              <Input
-                className="mt-1"
-                type="number"
-                placeholder="6"
-                value={form.estimated_hours}
-                onChange={e => set('estimated_hours', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Labor Rate</Label>
-              <Input
-                className="mt-1"
-                type="number"
-                placeholder="110"
-                value={form.labor_rate}
-                onChange={e => set('labor_rate', e.target.value)}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Markup %</Label>
-              <Input
-                className="mt-1"
-                type="number"
-                placeholder="30"
-                value={form.material_markup}
-                onChange={e => set('material_markup', e.target.value)}
-              />
-            </div>
           </div>
         </div>
 
