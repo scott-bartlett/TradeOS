@@ -137,8 +137,10 @@ export const invoicesApi = {
     api.post(`/api/invoices/build/${jobId}`).then(r => r.data),
   updateReview: (invoiceId: string, data: any) =>
     api.patch(`/api/invoices/${invoiceId}/review`, data).then(r => r.data),
-  send: (invoiceId: string) =>
-    api.post(`/api/invoices/${invoiceId}/send`).then(r => r.data),
+  send: (invoiceId: string, customerEmail: string) =>
+    api.post(`/api/invoices/${invoiceId}/send`, { customer_email: customerEmail }).then(r => r.data),
+  markPaid: (invoiceId: string, amountPaid?: number) =>
+    api.post(`/api/invoices/${invoiceId}/mark-paid`, { amount_paid: amountPaid }).then(r => r.data),
 };
 
 // ── USERS ─────────────────────────────────────────────────────────────────────
