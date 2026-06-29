@@ -121,6 +121,10 @@ export const changeOrdersApi = {
     api.get(`/api/change-orders/${jobId}`).then(r => r.data),
   create: (jobId: string, data: any) =>
     api.post(`/api/change-orders/${jobId}`, data).then(r => r.data),
+  generate: (jobId: string) =>
+    api.post(`/api/change-orders/${jobId}/generate`).then(r => r.data),
+  update: (coId: string, data: any) =>
+    api.patch(`/api/change-orders/${coId}`, data).then(r => r.data),
   approve: (coId: string) =>
     api.post(`/api/change-orders/${coId}/approve`).then(r => r.data),
 };

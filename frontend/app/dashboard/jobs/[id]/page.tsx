@@ -15,17 +15,18 @@ import { formatDate, formatTime } from '@/lib/date-utils';
 function ChangeOrdersCard({ jobId, changeOrders }: { jobId: string; changeOrders: any[] }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ description: '', additional_price: '' });
+  const [generating, setGenerating] = useState(false);
+  const [draft, setDraft] = useState<any>(null);
+  const [draftMessage, setDraftMessage] = useState('');
+  const [form, setForm] = useState({ description: '', additional_price: '', extra_hours: '' });
 
   const createMutation = useMutation({
-    mutationFn: () => changeOrdersApi.create(jobId, {
-      description: form.description,
-      additional_price: parseFloat(form.additional_price) || 0,
-    }),
+    mutationFn: (data: any) => changeOrdersApi.create(jobId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['change-orders', jobId] });
-      setForm({ description: '', additional_price: '' });
+      setForm({ description: '', additional_price: '', extra_hours: '' });
       setShowForm(false);
+      setDraft(null);
     },
   });
 
@@ -34,6 +35,32 @@ function ChangeOrdersCard({ jobId, changeOrders }: { jobId: string; changeOrders
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['change-orders', jobId] }),
   });
 
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setDraft(null);
+    try {
+      const result = await changeOrdersApi.generate(jobId);
+      if (result.no_change_order) {
+        setDraftMessage(result.message);
+        setDraft(null);
+      } else {
+        setDraft(result.draft);
+        setDraftMessage(result.message);
+        // Pre-fill form with AI draft
+        setForm({
+          description: result.draft.description || '',
+          additional_price: String(result.draft.additional_price || ''),
+          extra_hours: String(result.draft.extra_hours || ''),
+        });
+        setShowForm(true);
+      }
+    } catch (e) {
+      setDraftMessage('AI generation failed — add manually');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -41,77 +68,164 @@ function ChangeOrdersCard({ jobId, changeOrders }: { jobId: string; changeOrders
           <CardTitle className="text-sm font-semibold text-gray-700">
             Change Orders {changeOrders.length > 0 && `(${changeOrders.length})`}
           </CardTitle>
-          <button
-            onClick={() => setShowForm(true)}
-            className="text-xs text-[#1A6E45] hover:underline flex items-center gap-1"
-          >
-            <Plus size={12} /> Add
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="text-xs text-purple-600 hover:underline flex items-center gap-1"
+            >
+              {generating ? '⏳ Analyzing...' : '✦ AI Draft'}
+            </button>
+            <button
+              onClick={() => { setShowForm(true); setDraft(null); }}
+              className="text-xs text-[#1A6E45] hover:underline flex items-center gap-1"
+            >
+              <Plus size={12} /> Add
+            </button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+
+        {/* AI message */}
+        {draftMessage && !showForm && (
+          <div className="text-xs text-purple-600 bg-purple-50 rounded-lg p-2">
+            ✦ {draftMessage}
+          </div>
+        )}
+
+        {/* Create/Edit form */}
         {showForm && (
           <div className="border border-amber-200 rounded-lg p-3 bg-amber-50/30 space-y-2">
-            <p className="text-xs font-semibold text-amber-700">New Change Order</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-amber-700">
+                {draft ? '✦ AI Draft — Review & Save' : 'New Change Order'}
+              </p>
+              {draft && (
+                <span className="text-xs text-purple-500">AI generated</span>
+              )}
+            </div>
+
             <textarea
-              autoFocus
               rows={2}
               value={form.description}
               onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
               placeholder="Describe the additional work..."
               className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] resize-none"
             />
-            <div className="flex gap-2 items-center">
-              <div className="flex-1">
+
+            {/* Line items from AI draft */}
+            {draft?.line_items?.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500 font-medium">Parts & Materials:</p>
+                {draft.line_items.map((item: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1 border border-gray-100">
+                    <span className="text-gray-700">{item.description}</span>
+                    <div className="flex items-center gap-2 text-gray-500 flex-shrink-0 ml-2">
+                      <span>{item.quantity} {item.unit}</span>
+                      {item.from_van && (
+                        <span className="text-amber-600 font-medium">from van</span>
+                      )}
+                      {item.unit_cost && (
+                        <span>${item.unit_cost}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-500">Extra Hours</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={form.extra_hours}
+                  onChange={e => setForm(p => ({ ...p, extra_hours: e.target.value }))}
+                  placeholder="0"
+                  className="mt-1 w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Additional Price $</label>
                 <input
                   type="number"
                   value={form.additional_price}
                   onChange={e => setForm(p => ({ ...p, additional_price: e.target.value }))}
-                  placeholder="Additional price $"
-                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+                  placeholder="0.00"
+                  className="mt-1 w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
                 />
               </div>
-              <Button size="sm" className="bg-[#1A6E45] hover:bg-[#145a38] text-xs h-8"
+            </div>
+
+            <div className="flex gap-2">
+              <Button size="sm" className="flex-1 bg-[#1A6E45] hover:bg-[#145a38] text-xs h-8"
                 disabled={!form.description || createMutation.isPending}
-                onClick={() => createMutation.mutate()}>
-                {createMutation.isPending ? 'Saving...' : 'Save'}
+                onClick={() => createMutation.mutate({
+                  description: form.description,
+                  additional_price: parseFloat(form.additional_price) || 0,
+                  extra_hours: form.extra_hours ? parseFloat(form.extra_hours) : null,
+                  line_items: draft?.line_items || null,
+                })}>
+                {createMutation.isPending ? 'Saving...' : 'Save Change Order'}
               </Button>
               <Button size="sm" variant="outline" className="text-xs h-8"
-                onClick={() => setShowForm(false)}>
+                onClick={() => { setShowForm(false); setDraft(null); setDraftMessage(''); }}>
                 Cancel
               </Button>
             </div>
           </div>
         )}
 
-        {changeOrders.length === 0 && !showForm && (
+        {changeOrders.length === 0 && !showForm && !draftMessage && (
           <p className="text-xs text-gray-400 text-center py-2">No change orders yet</p>
         )}
 
         {changeOrders.map((co: any) => (
-          <div key={co.change_order_id} className="flex items-start justify-between p-3 rounded-lg bg-amber-50 border border-amber-100">
-            <div className="flex-1">
-              <p className="text-xs font-semibold text-amber-700 mb-1">CO #{co.co_number}</p>
-              <p className="text-sm text-gray-700">{co.description}</p>
+          <div key={co.change_order_id} className="p-3 rounded-lg bg-amber-50 border border-amber-100">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-amber-700 mb-1">CO #{co.co_number}</p>
+                <p className="text-sm text-gray-700">{co.description}</p>
+                {co.extra_hours > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">+{co.extra_hours} hrs labor</p>
+                )}
+              </div>
+              <div className="text-right ml-4 flex-shrink-0 space-y-1">
+                <p className="text-sm font-bold text-gray-900">${co.additional_price}</p>
+                <span className={`text-xs font-semibold ${
+                  co.status === 'approved' ? 'text-green-600' :
+                  co.status === 'declined' ? 'text-red-600' :
+                  'text-amber-600'
+                }`}>{co.status}</span>
+                {co.status === 'pending' && (
+                  <div>
+                    <button
+                      onClick={() => approveMutation.mutate(co.change_order_id)}
+                      className="text-xs text-green-600 hover:underline block"
+                    >
+                      Approve
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="text-right ml-4 flex-shrink-0 space-y-1">
-              <p className="text-sm font-bold text-gray-900">${co.additional_price}</p>
-              <span className={`text-xs font-semibold ${
-                co.status === 'approved' ? 'text-green-600' :
-                co.status === 'declined' ? 'text-red-600' :
-                'text-amber-600'
-              }`}>{co.status}</span>
-              {co.status === 'pending' && (
-                <div>
-                  <button
-                    onClick={() => approveMutation.mutate(co.change_order_id)}
-                    className="text-xs text-green-600 hover:underline block"
-                  >
-                    Approve
-                  </button>
-                </div>
-              )}
-            </div>
+
+            {/* Line items */}
+            {co.line_items?.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-amber-100 space-y-1">
+                {co.line_items.map((item: any, i: number) => (
+                  <div key={i} className="flex justify-between text-xs text-gray-600">
+                    <span>{item.description}</span>
+                    <span className="text-gray-400 ml-2">
+                      {item.quantity} {item.unit}
+                      {item.from_van && ' · from van'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </CardContent>
