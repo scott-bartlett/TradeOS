@@ -1,12 +1,284 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { jobsApi, usersApi } from '@/lib/api';
+import { jobsApi, usersApi, changeOrdersApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Save, AlertTriangle, Package, User, ChevronRight } from 'lucide-react';
+import { Mic, MicOff, Save, AlertTriangle, Package, User, ChevronRight, Plus, PenLine } from 'lucide-react';
 import { formatTime } from '@/lib/date-utils';
+
+// ── SIGNATURE PAD ─────────────────────────────────────────────────────────────
+
+function SignaturePad({ onSave, onCancel }: {
+  onSave: (dataUrl: string) => void;
+  onCancel: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [hasStrokes, setHasStrokes] = useState(false);
+
+  const getPos = (e: any, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches?.[0] || e;
+    return {
+      x: (touch.clientX - rect.left) * (canvas.width / rect.width),
+      y: (touch.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  };
+
+  const startDraw = (e: any) => {
+    e.preventDefault();
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    const pos = getPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    setDrawing(true);
+  };
+
+  const draw = (e: any) => {
+    e.preventDefault();
+    if (!drawing) return;
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    const pos = getPos(e, canvas);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = '#1A6E45';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    setHasStrokes(true);
+  };
+
+  const endDraw = () => setDrawing(false);
+
+  const clear = () => {
+    const canvas = canvasRef.current!;
+    canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height);
+    setHasStrokes(false);
+  };
+
+  const save = () => {
+    onSave(canvasRef.current!.toDataURL('image/png'));
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-gray-600">Customer Signature</p>
+      <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
+        <canvas
+          ref={canvasRef}
+          width={600}
+          height={180}
+          className="w-full touch-none cursor-crosshair"
+          onMouseDown={startDraw}
+          onMouseMove={draw}
+          onMouseUp={endDraw}
+          onMouseLeave={endDraw}
+          onTouchStart={startDraw}
+          onTouchMove={draw}
+          onTouchEnd={endDraw}
+        />
+      </div>
+      <p className="text-xs text-gray-400 text-center">Sign above with finger or mouse</p>
+      <div className="flex gap-2">
+        <Button size="sm" className="flex-1 bg-[#1A6E45] hover:bg-[#145a38] text-xs h-8"
+          disabled={!hasStrokes} onClick={save}>
+          Save Signature
+        </Button>
+        <Button size="sm" variant="outline" className="text-xs h-8" onClick={clear}>
+          Clear
+        </Button>
+        <Button size="sm" variant="outline" className="text-xs h-8" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── FIELD CHANGE ORDER FORM ───────────────────────────────────────────────────
+
+function FieldCOForm({ jobId, techId, onSuccess, onCancel }: {
+  jobId: string;
+  techId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState({
+    description: '',
+    rough_hours: '',
+    rough_parts: '',
+    customer_approved: false,
+  });
+  const [showSigPad, setShowSigPad] = useState(false);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+
+  const toggleMic = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition ||
+                              (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) { alert('Use Chrome for voice'); return; }
+    if (isRecording) { recognitionRef.current?.stop(); setIsRecording(false); return; }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    let final = form.description ? form.description + ' ' : '';
+
+    recognition.onstart = () => setIsRecording(true);
+    recognition.onresult = (event: any) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) final += event.results[i][0].transcript + ' ';
+        else interim += event.results[i][0].transcript;
+      }
+      set('description', final + interim);
+    };
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => { if (isRecording) recognition.start(); };
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const mutation = useMutation({
+    mutationFn: () => changeOrdersApi.create(jobId, {
+      description: form.description,
+      rough_hours: form.rough_hours ? parseFloat(form.rough_hours) : null,
+      rough_parts: form.rough_parts || null,
+      customer_signed: !!signature,
+      signature_data: signature || null,
+      captured_by_tech: techId,
+      field_approved: true,
+    }),
+    onSuccess,
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-gray-900">Field Change Request</p>
+        <button onClick={onCancel} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+      </div>
+
+      {/* Description + mic */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs text-gray-500">What extra work did the customer request?</label>
+          <button
+            onClick={toggleMic}
+            className={`text-xs flex items-center gap-1 px-2 py-1 rounded-lg ${
+              isRecording ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {isRecording ? <MicOff size={12} /> : <Mic size={12} />}
+            {isRecording ? 'Stop' : 'Dictate'}
+          </button>
+        </div>
+        <textarea
+          rows={3}
+          value={form.description}
+          onChange={e => set('description', e.target.value)}
+          placeholder="Customer asked for additional wiring, 3 extra hours of work..."
+          className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] resize-none"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-500">Rough Extra Hours</label>
+          <input
+            type="number"
+            step="0.5"
+            value={form.rough_hours}
+            onChange={e => set('rough_hours', e.target.value)}
+            placeholder="e.g. 3"
+            className="mt-1 w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Parts Needed</label>
+          <input
+            type="text"
+            value={form.rough_parts}
+            onChange={e => set('rough_parts', e.target.value)}
+            placeholder="capacitor, wire..."
+            className="mt-1 w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+          />
+        </div>
+      </div>
+
+      {/* Customer approval toggle */}
+      <div
+        onClick={() => set('customer_approved', !form.customer_approved)}
+        className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+          form.customer_approved
+            ? 'border-[#1A6E45] bg-[#E8F5EE]'
+            : 'border-gray-200 bg-white'
+        }`}
+      >
+        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+          form.customer_approved ? 'border-[#1A6E45] bg-[#1A6E45]' : 'border-gray-300'
+        }`}>
+          {form.customer_approved && <span className="text-white text-xs">✓</span>}
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-800">Customer verbally approved</p>
+          <p className="text-xs text-gray-500">They agreed to this additional work on site</p>
+        </div>
+      </div>
+
+      {/* Signature */}
+      {form.customer_approved && !signature && !showSigPad && (
+        <button
+          onClick={() => setShowSigPad(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[#A8D5BC] rounded-lg text-sm text-[#1A6E45] hover:bg-[#E8F5EE] transition-colors"
+        >
+          <PenLine size={16} />
+          Get Customer Signature (recommended)
+        </button>
+      )}
+
+      {showSigPad && (
+        <SignaturePad
+          onSave={(data) => { setSignature(data); setShowSigPad(false); }}
+          onCancel={() => setShowSigPad(false)}
+        />
+      )}
+
+      {signature && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-green-700">✓ Signature captured</p>
+            <button
+              onClick={() => { setSignature(null); setShowSigPad(true); }}
+              className="text-xs text-gray-400 hover:text-gray-600"
+            >
+              Redo
+            </button>
+          </div>
+          <img src={signature} alt="Customer signature" className="w-full border border-gray-200 rounded-lg bg-white max-h-24 object-contain" />
+        </div>
+      )}
+
+      <Button
+        className="w-full bg-[#1A6E45] hover:bg-[#145a38]"
+        disabled={!form.description.trim() || mutation.isPending}
+        onClick={() => mutation.mutate()}
+      >
+        {mutation.isPending ? 'Submitting...' : 'Submit Change Request'}
+      </Button>
+      <p className="text-xs text-gray-400 text-center">
+        Jamie will review and price this in the office
+      </p>
+    </div>
+  );
+}
 
 export default function FieldPage() {
   const queryClient = useQueryClient();
@@ -14,6 +286,7 @@ export default function FieldPage() {
   const [selectedTechId, setSelectedTechId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const [showCOForm, setShowCOForm] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   const { data: techsData } = useQuery({
@@ -266,6 +539,31 @@ export default function FieldPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Change Order Request */}
+      <Card className="mb-4">
+        <CardContent className="pt-4">
+          {showCOForm ? (
+            <FieldCOForm
+              jobId={selectedJobId!}
+              techId={selectedTechId!}
+              onSuccess={() => {
+                setShowCOForm(false);
+                queryClient.invalidateQueries({ queryKey: ['change-orders', selectedJobId] });
+              }}
+              onCancel={() => setShowCOForm(false)}
+            />
+          ) : (
+            <button
+              onClick={() => setShowCOForm(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-amber-200 rounded-lg text-sm text-amber-700 hover:bg-amber-50 transition-colors"
+            >
+              <Plus size={16} />
+              Request Change Order
+            </button>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Job Brief */}
       <Card className="mb-4 bg-[#1e2d24] border-0">

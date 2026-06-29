@@ -193,23 +193,48 @@ function ChangeOrdersCard({ jobId, changeOrders }: { jobId: string; changeOrders
         )}
 
         {changeOrders.map((co: any) => (
-          <div key={co.change_order_id} className="p-3 rounded-lg bg-amber-50 border border-amber-100">
+          <div key={co.change_order_id} className={`p-3 rounded-lg border ${
+            co.status === 'field_approved'
+              ? 'bg-amber-50 border-amber-300'
+              : 'bg-amber-50 border-amber-100'
+          }`}>
+            {co.status === 'field_approved' && (
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-xs font-bold text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full">
+                  ⚡ Field Request — Needs Pricing
+                </span>
+                {co.customer_signed && (
+                  <span className="text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                    ✓ Signed
+                  </span>
+                )}
+              </div>
+            )}
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-xs font-semibold text-amber-700 mb-1">CO #{co.co_number}</p>
                 <p className="text-sm text-gray-700">{co.description}</p>
+                {co.rough_hours > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">~{co.rough_hours} hrs (rough estimate)</p>
+                )}
+                {co.rough_parts && (
+                  <p className="text-xs text-gray-500 mt-0.5">Parts: {co.rough_parts}</p>
+                )}
                 {co.extra_hours > 0 && (
                   <p className="text-xs text-gray-500 mt-1">+{co.extra_hours} hrs labor</p>
                 )}
               </div>
               <div className="text-right ml-4 flex-shrink-0 space-y-1">
-                <p className="text-sm font-bold text-gray-900">${co.additional_price}</p>
+                {co.additional_price > 0 && (
+                  <p className="text-sm font-bold text-gray-900">${co.additional_price}</p>
+                )}
                 <span className={`text-xs font-semibold ${
-                  co.status === 'approved' ? 'text-green-600' :
-                  co.status === 'declined' ? 'text-red-600' :
+                  co.status === 'approved'       ? 'text-green-600' :
+                  co.status === 'field_approved' ? 'text-amber-600' :
+                  co.status === 'declined'       ? 'text-red-600' :
                   'text-amber-600'
-                }`}>{co.status}</span>
-                {co.status === 'pending' && (
+                }`}>{co.status.replace('_', ' ')}</span>
+                {(co.status === 'pending' || co.status === 'field_approved') && (
                   <div className="flex flex-col gap-0.5 mt-1">
                     <button
                       onClick={() => approveMutation.mutate(co.change_order_id)}

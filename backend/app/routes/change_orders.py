@@ -31,6 +31,13 @@ class ChangeOrderCreate(BaseModel):
     additional_price: Optional[float] = 0
     extra_hours: Optional[float] = None
     line_items: Optional[list] = None
+    # Field capture
+    rough_hours: Optional[float] = None
+    rough_parts: Optional[str] = None
+    customer_signed: Optional[bool] = False
+    signature_data: Optional[str] = None   # base64 PNG
+    captured_by_tech: Optional[str] = None
+    field_approved: Optional[bool] = False  # if True, sets status to field_approved
 
 
 class ChangeOrderUpdate(BaseModel):
@@ -51,6 +58,11 @@ def _co_response(co: ChangeOrder) -> dict:
         "additional_price": float(co.additional_price or 0),
         "extra_hours": float(co.extra_hours) if co.extra_hours else None,
         "line_items": co.line_items or [],
+        "rough_hours": float(co.rough_hours) if co.rough_hours else None,
+        "rough_parts": co.rough_parts,
+        "customer_signed": co.customer_signed or False,
+        "has_signature": bool(co.signature_data),
+        "captured_by_tech": str(co.captured_by_tech) if co.captured_by_tech else None,
         "status": co.status,
         "approved_at": co.approved_at,
         "created_at": co.created_at.isoformat(),
@@ -76,12 +88,13 @@ async def list_change_orders(job_id: str, db: AsyncSession = Depends(get_db)):
 async def create_change_order(
     job_id: str, data: ChangeOrderCreate, db: AsyncSession = Depends(get_db)
 ):
-    # Get next CO number for this job
     result = await db.execute(
         select(func.max(ChangeOrder.co_number))
         .where(ChangeOrder.job_id == uuid.UUID(job_id))
     )
     max_num = result.scalar() or 0
+
+    status = ChangeOrderStatus.field_approved if data.field_approved else ChangeOrderStatus.pending
 
     co = ChangeOrder(
         job_id=uuid.UUID(job_id),
@@ -90,7 +103,12 @@ async def create_change_order(
         additional_price=data.additional_price or 0,
         extra_hours=data.extra_hours,
         line_items=data.line_items,
-        status=ChangeOrderStatus.pending,
+        rough_hours=data.rough_hours,
+        rough_parts=data.rough_parts,
+        customer_signed=data.customer_signed or False,
+        signature_data=data.signature_data,
+        captured_by_tech=uuid.UUID(data.captured_by_tech) if data.captured_by_tech else None,
+        status=status,
     )
     db.add(co)
     await db.commit()

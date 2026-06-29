@@ -80,9 +80,10 @@ class JobPhoto(BaseModel):
 # ── CHANGE ORDERS ─────────────────────────────────────────────────────────────
 
 class ChangeOrderStatus(str, enum.Enum):
-    pending  = "pending"
-    approved = "approved"
-    declined = "declined"
+    pending        = "pending"         # Created in office, awaiting approval
+    field_approved = "field_approved"  # Marcus captured on site, needs Jamie to price
+    approved       = "approved"        # Formally approved, will go to invoice
+    declined       = "declined"        # Customer declined
 
 
 class ChangeOrder(BaseModel):
@@ -91,6 +92,10 @@ class ChangeOrder(BaseModel):
     AI drafts from field notes, Jamie reviews, customer approves.
     line_items: [{ description, sku, quantity, unit, unit_cost, from_van }]
     extra_hours: additional labor hours beyond the original quote
+
+    Field capture flow:
+    Marcus captures on site → field_approved status
+    Jamie prices it in office → approved status → invoice
     """
     __tablename__ = "change_orders"
 
@@ -99,8 +104,15 @@ class ChangeOrder(BaseModel):
     description      = Column(Text, nullable=False)
     additional_items = Column(Text)                     # legacy plain text
     additional_price = Column(Numeric(10, 2))
-    extra_hours      = Column(Numeric(5, 2))            # extra labor hours
-    line_items       = Column(JSONB)                    # structured parts list
+    extra_hours      = Column(Numeric(5, 2))
+    line_items       = Column(JSONB)
+
+    # Field capture fields
+    rough_hours      = Column(Numeric(5, 2))            # Marcus's rough estimate
+    rough_parts      = Column(Text)                     # Marcus's rough parts description
+    customer_signed  = Column(Boolean, default=False)   # Customer signed on device
+    signature_data   = Column(Text)                     # Base64 PNG of signature
+    captured_by_tech = Column(UUID(as_uuid=True), ForeignKey("users.id"))
 
     status          = Column(Enum(ChangeOrderStatus), default=ChangeOrderStatus.pending)
     approval_token  = Column(String(255))
