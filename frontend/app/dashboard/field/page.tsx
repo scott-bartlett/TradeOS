@@ -6,6 +6,7 @@ import { jobsApi, usersApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Save, AlertTriangle, Package, User, ChevronRight } from 'lucide-react';
+import { formatTime } from '@/lib/date-utils';
 
 export default function FieldPage() {
   const queryClient = useQueryClient();
@@ -15,26 +16,22 @@ export default function FieldPage() {
   const [noteText, setNoteText] = useState('');
   const recognitionRef = useRef<any>(null);
 
-  // Get all techs
   const { data: techsData } = useQuery({
     queryKey: ['techs'],
     queryFn: () => usersApi.getByRole('tech'),
   });
 
-  // Get all active jobs
   const { data: jobsData } = useQuery({
     queryKey: ['jobs'],
     queryFn: () => jobsApi.list(),
   });
 
-  // Get selected job detail
   const { data: job } = useQuery({
     queryKey: ['job', selectedJobId],
     queryFn: () => jobsApi.get(selectedJobId!),
     enabled: !!selectedJobId,
   });
 
-  // Get field notes for selected job
   const { data: fieldNotesData } = useQuery({
     queryKey: ['field-notes', selectedJobId],
     queryFn: () => jobsApi.getFieldNotes(selectedJobId!),
@@ -98,7 +95,7 @@ export default function FieldPage() {
   const techs = techsData?.users || [];
   const jobs = jobsData?.jobs?.filter((j: any) =>
     !['cancelled', 'paid'].includes(j.status)
-) || [];
+  ) || [];
   const fieldNotes = fieldNotesData?.notes || [];
   const analysis = job?.ai_analysis;
 
@@ -162,11 +159,16 @@ export default function FieldPage() {
                 onClick={() => setSelectedJobId(j.job_id)}
                 className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 hover:border-[#1A6E45] hover:bg-[#E8F5EE] transition-colors text-left"
               >
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-900">{j.title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{j.job_number}</p>
+                  {j.customer_name && (
+                    <p className="text-xs text-gray-600 mt-0.5">{j.customer_name}</p>
+                  )}
+                  {j.service_address && (
+                    <p className="text-xs text-gray-400 mt-0.5">📍 {j.service_address}</p>
+                  )}
                 </div>
-                <ChevronRight size={16} className="text-gray-400" />
+                <ChevronRight size={16} className="text-gray-400 flex-shrink-0 ml-2" />
               </button>
             ))}
           </div>
@@ -175,8 +177,9 @@ export default function FieldPage() {
     );
   }
 
-  // Step 3 — Field view for selected job
+  // Step 3 — Field view
   const tech = techs.find((t: any) => t.user_id === selectedTechId);
+  const currentJob = jobs.find((j: any) => j.job_id === selectedJobId);
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -195,10 +198,15 @@ export default function FieldPage() {
           <span className="text-xs font-semibold text-gray-500">{tech?.first_name}</span>
         </div>
         <h1 className="text-xl font-bold text-gray-900">{job?.title || 'Loading...'}</h1>
-        <p className="text-sm text-gray-400">{job?.job_number}</p>
+        {currentJob?.customer_name && (
+          <p className="text-sm text-gray-600">{currentJob.customer_name}</p>
+        )}
+        {currentJob?.service_address && (
+          <p className="text-xs text-gray-400">📍 {currentJob.service_address}</p>
+        )}
       </div>
 
-      {/* MIC — always first */}
+      {/* MIC */}
       <Card className="mb-4 border-[#A8D5BC]">
         <CardContent className="pt-4">
           <button
@@ -248,8 +256,8 @@ export default function FieldPage() {
                 <div key={note.note_id} className="border-l-2 border-[#A8D5BC] pl-3">
                   <p className="text-xs text-gray-400 mb-1">
                     {note.captured_at
-                      ? new Date(note.captured_at).toLocaleTimeString()
-                      : new Date(note.created_at).toLocaleTimeString()}
+                      ? formatTime(note.captured_at)
+                      : formatTime(note.created_at)}
                   </p>
                   <p className="text-sm text-gray-700">{note.note_text}</p>
                 </div>

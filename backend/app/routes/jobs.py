@@ -468,17 +468,42 @@ async def create_job(job_data: JobCreate, db: AsyncSession = Depends(get_db)):
 
 @router.get("/")
 async def list_jobs(status: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    from app.models.customer import Customer, ServiceLocation
     query = select(Job).order_by(Job.created_at.desc())
     if status:
         query = query.where(Job.status == JobStatus(status))
     result = await db.execute(query)
     jobs = result.scalars().all()
-    return {
-        "jobs": [{"job_id": str(j.id), "job_number": j.job_number, "title": j.title,
-                  "status": j.status, "vertical": j.vertical,
-                  "created_at": j.created_at.isoformat()} for j in jobs],
-        "total": len(jobs)
-    }
+
+    # Fetch customer and location info for each job
+    job_list = []
+    for j in jobs:
+        customer = None
+        location = None
+        if j.customer_id:
+            c_result = await db.execute(
+                select(Customer).where(Customer.id == j.customer_id)
+            )
+            customer = c_result.scalar_one_or_none()
+        if j.service_location_id:
+            l_result = await db.execute(
+                select(ServiceLocation).where(ServiceLocation.id == j.service_location_id)
+            )
+            location = l_result.scalar_one_or_none()
+
+        job_list.append({
+            "job_id": str(j.id),
+            "job_number": j.job_number,
+            "title": j.title,
+            "status": j.status,
+            "vertical": j.vertical,
+            "customer_name": customer.display_name if customer else None,
+            "service_address": f"{location.street}, {location.city}" if location else None,
+            "service_city": location.city if location else None,
+            "created_at": j.created_at.isoformat(),
+        })
+
+    return {"jobs": job_list, "total": len(job_list)}
 
 
 # ── GET JOB DETAIL ────────────────────────────────────────────────────────────
