@@ -244,3 +244,40 @@ async def approve_change_order(co_id: str, db: AsyncSession = Depends(get_db)):
     co.approved_at = datetime.utcnow().isoformat()
     await db.commit()
     return _co_response(co)
+
+
+# ── DECLINE ───────────────────────────────────────────────────────────────────
+
+@router.post("/{co_id}/decline")
+async def decline_change_order(co_id: str, db: AsyncSession = Depends(get_db)):
+    """Customer declined — keep as record, mark declined."""
+    result = await db.execute(
+        select(ChangeOrder).where(ChangeOrder.id == uuid.UUID(co_id))
+    )
+    co = result.scalar_one_or_none()
+    if not co:
+        raise HTTPException(status_code=404, detail="Change order not found")
+
+    co.status = ChangeOrderStatus.declined
+    await db.commit()
+    return _co_response(co)
+
+
+# ── DELETE ────────────────────────────────────────────────────────────────────
+
+@router.delete("/{co_id}")
+async def delete_change_order(co_id: str, db: AsyncSession = Depends(get_db)):
+    """Hard delete — only for pending COs that were entered in error."""
+    result = await db.execute(
+        select(ChangeOrder).where(ChangeOrder.id == uuid.UUID(co_id))
+    )
+    co = result.scalar_one_or_none()
+    if not co:
+        raise HTTPException(status_code=404, detail="Change order not found")
+    if co.status != ChangeOrderStatus.pending:
+        raise HTTPException(status_code=400,
+                            detail="Only pending change orders can be deleted")
+
+    await db.delete(co)
+    await db.commit()
+    return {"message": "Change order deleted"}

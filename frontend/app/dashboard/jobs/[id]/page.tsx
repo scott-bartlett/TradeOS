@@ -35,6 +35,16 @@ function ChangeOrdersCard({ jobId, changeOrders }: { jobId: string; changeOrders
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['change-orders', jobId] }),
   });
 
+  const declineMutation = useMutation({
+    mutationFn: (coId: string) => changeOrdersApi.decline(coId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['change-orders', jobId] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (coId: string) => changeOrdersApi.delete(coId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['change-orders', jobId] }),
+  });
+
   const handleGenerate = async () => {
     setGenerating(true);
     setDraft(null);
@@ -200,12 +210,28 @@ function ChangeOrdersCard({ jobId, changeOrders }: { jobId: string; changeOrders
                   'text-amber-600'
                 }`}>{co.status}</span>
                 {co.status === 'pending' && (
-                  <div>
+                  <div className="flex flex-col gap-0.5 mt-1">
                     <button
                       onClick={() => approveMutation.mutate(co.change_order_id)}
-                      className="text-xs text-green-600 hover:underline block"
+                      className="text-xs text-green-600 hover:underline"
                     >
                       Approve
+                    </button>
+                    <button
+                      onClick={() => declineMutation.mutate(co.change_order_id)}
+                      className="text-xs text-amber-600 hover:underline"
+                    >
+                      Decline
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm('Delete this change order?')) {
+                          deleteMutation.mutate(co.change_order_id);
+                        }
+                      }}
+                      className="text-xs text-red-500 hover:underline"
+                    >
+                      Delete
                     </button>
                   </div>
                 )}

@@ -127,6 +127,10 @@ export const changeOrdersApi = {
     api.patch(`/api/change-orders/${coId}`, data).then(r => r.data),
   approve: (coId: string) =>
     api.post(`/api/change-orders/${coId}/approve`).then(r => r.data),
+  decline: (coId: string) =>
+    api.post(`/api/change-orders/${coId}/decline`).then(r => r.data),
+  delete: (coId: string) =>
+    api.delete(`/api/change-orders/${coId}`).then(r => r.data),
 };
 
 // ── INVOICES ──────────────────────────────────────────────────────────────────
