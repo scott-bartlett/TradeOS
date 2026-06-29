@@ -351,3 +351,18 @@ Return ONLY a JSON array of flags (no markdown), maximum 5 flags, most important
             raw = raw[4:]
 
     return json.loads(raw.strip())
+# ── GENERIC TEXT RESPONSE ─────────────────────────────────────────────────────
+
+async def get_ai_response(prompt: str, max_tokens: int = 1024) -> str:
+    """
+    Generic text completion — used by change order generation and other
+    endpoints that need a simple prompt → response.
+    Returns the raw text string from Claude.
+    """
+    client = _get_client()
+    message = client.messages.create(
+        model=settings.anthropic_model,
+        max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return message.content[0].text.strip()
