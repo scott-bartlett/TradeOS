@@ -1,15 +1,123 @@
 'use client';
 
+import { useState } from 'react';
 import { SupplyList } from '@/components/supply-list';
 import { QuoteBuilder } from '@/components/quote-builder';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { jobsApi, photosApi, changeOrdersApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Camera, FileText, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Camera, FileText, AlertTriangle, Plus } from 'lucide-react';
 import { PhotoUpload } from '@/components/photo-upload';
-import { formatDate } from '@/lib/date-utils';
+import { formatDate, formatTime } from '@/lib/date-utils';
+
+function ChangeOrdersCard({ jobId, changeOrders }: { jobId: string; changeOrders: any[] }) {
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ description: '', additional_price: '' });
+
+  const createMutation = useMutation({
+    mutationFn: () => changeOrdersApi.create(jobId, {
+      description: form.description,
+      additional_price: parseFloat(form.additional_price) || 0,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['change-orders', jobId] });
+      setForm({ description: '', additional_price: '' });
+      setShowForm(false);
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (coId: string) => changeOrdersApi.approve(coId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['change-orders', jobId] }),
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-gray-700">
+            Change Orders {changeOrders.length > 0 && `(${changeOrders.length})`}
+          </CardTitle>
+          <button
+            onClick={() => setShowForm(true)}
+            className="text-xs text-[#1A6E45] hover:underline flex items-center gap-1"
+          >
+            <Plus size={12} /> Add
+          </button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {showForm && (
+          <div className="border border-amber-200 rounded-lg p-3 bg-amber-50/30 space-y-2">
+            <p className="text-xs font-semibold text-amber-700">New Change Order</p>
+            <textarea
+              autoFocus
+              rows={2}
+              value={form.description}
+              onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+              placeholder="Describe the additional work..."
+              className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] resize-none"
+            />
+            <div className="flex gap-2 items-center">
+              <div className="flex-1">
+                <input
+                  type="number"
+                  value={form.additional_price}
+                  onChange={e => setForm(p => ({ ...p, additional_price: e.target.value }))}
+                  placeholder="Additional price $"
+                  className="w-full text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+                />
+              </div>
+              <Button size="sm" className="bg-[#1A6E45] hover:bg-[#145a38] text-xs h-8"
+                disabled={!form.description || createMutation.isPending}
+                onClick={() => createMutation.mutate()}>
+                {createMutation.isPending ? 'Saving...' : 'Save'}
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs h-8"
+                onClick={() => setShowForm(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {changeOrders.length === 0 && !showForm && (
+          <p className="text-xs text-gray-400 text-center py-2">No change orders yet</p>
+        )}
+
+        {changeOrders.map((co: any) => (
+          <div key={co.change_order_id} className="flex items-start justify-between p-3 rounded-lg bg-amber-50 border border-amber-100">
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-amber-700 mb-1">CO #{co.co_number}</p>
+              <p className="text-sm text-gray-700">{co.description}</p>
+            </div>
+            <div className="text-right ml-4 flex-shrink-0 space-y-1">
+              <p className="text-sm font-bold text-gray-900">${co.additional_price}</p>
+              <span className={`text-xs font-semibold ${
+                co.status === 'approved' ? 'text-green-600' :
+                co.status === 'declined' ? 'text-red-600' :
+                'text-amber-600'
+              }`}>{co.status}</span>
+              {co.status === 'pending' && (
+                <div>
+                  <button
+                    onClick={() => approveMutation.mutate(co.change_order_id)}
+                    className="text-xs text-green-600 hover:underline block"
+                  >
+                    Approve
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
 
 const statusColor: Record<string, string> = {
   estimate:    'bg-gray-100 text-gray-700',
@@ -26,7 +134,11 @@ const statusColor: Record<string, string> = {
 export default function JobDetailPage() {
   const { id } = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const jobId = id as string;
+
+  const [editingHours, setEditingHours] = useState(false);
+  const [actualHours, setActualHours] = useState('');
 
   const { data: job, isLoading } = useQuery({
     queryKey: ['job', jobId],
@@ -51,6 +163,14 @@ export default function JobDetailPage() {
   const { data: supplyData } = useQuery({
     queryKey: ['supply-items', jobId],
     queryFn: () => jobsApi.getSupplyItems(jobId),
+  });
+
+  const updateHoursMutation = useMutation({
+    mutationFn: (hours: number) => jobsApi.updatePricing(jobId, { estimated_hours: hours }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+      setEditingHours(false);
+    },
   });
 
   if (isLoading) return <div className="p-6 text-sm text-gray-400">Loading job...</div>;
@@ -180,8 +300,8 @@ export default function JobDetailPage() {
                     <div key={note.note_id} className="border-l-2 border-[#A8D5BC] pl-3">
                       <p className="text-xs text-gray-400 mb-1">
                         {note.captured_at
-                          ? new Date(note.captured_at).toLocaleTimeString()
-                          : new Date(note.created_at).toLocaleTimeString()}
+                          ? formatTime(note.captured_at)
+                          : formatTime(note.created_at)}
                       </p>
                       <p className="text-sm text-gray-700">{note.note_text}</p>
                     </div>
@@ -192,46 +312,49 @@ export default function JobDetailPage() {
           )}
 
           {/* Change Orders */}
-          {changeOrders.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-gray-700">Change Orders</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {changeOrders.map((co: any) => (
-                    <div key={co.change_order_id} className="flex items-start justify-between p-3 rounded-lg bg-amber-50 border border-amber-100">
-                      <div className="flex-1">
-                        <p className="text-xs font-semibold text-amber-700 mb-1">CO #{co.co_number}</p>
-                        <p className="text-sm text-gray-700">{co.description}</p>
-                      </div>
-                      <div className="text-right ml-4 flex-shrink-0">
-                        <p className="text-sm font-bold text-gray-900">${co.additional_price}</p>
-                        <span className={`text-xs font-semibold ${
-                          co.status === 'approved' ? 'text-green-600' :
-                          co.status === 'declined' ? 'text-red-600' :
-                          'text-amber-600'
-                        }`}>{co.status}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <ChangeOrdersCard jobId={jobId} changeOrders={changeOrders} />
         </div>
 
         {/* Right column */}
         <div className="space-y-5">
 
-          {/* Job details — hours removed, now lives in QuoteBuilder */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-gray-700">Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Actual hours — editable */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">Actual Hours</span>
+                {editingHours ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      autoFocus
+                      type="number"
+                      step="0.5"
+                      value={actualHours}
+                      onChange={e => setActualHours(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') updateHoursMutation.mutate(parseFloat(actualHours));
+                        if (e.key === 'Escape') setEditingHours(false);
+                      }}
+                      className="w-16 text-xs px-2 py-0.5 border border-[#1A6E45] rounded focus:outline-none text-right"
+                    />
+                    <button onClick={() => updateHoursMutation.mutate(parseFloat(actualHours))}
+                      className="text-[#1A6E45]">
+                      <Plus size={12} className="rotate-45" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setActualHours(String(job.actual_hours || job.estimated_hours || '')); setEditingHours(true); }}
+                    className="text-xs font-medium text-gray-700 hover:text-[#1A6E45] cursor-pointer"
+                  >
+                    {job.actual_hours ? `${job.actual_hours} hrs` : job.estimated_hours ? `${job.estimated_hours} hrs (est)` : '— set hours'}
+                  </button>
+                )}
+              </div>
               {[
-                ['Actual Hours', job.actual_hours  ? `${job.actual_hours} hrs`  : null],
                 ['Created',      formatDate(job.created_at)],
                 ['Deposit',      job.deposit_required ? `$${job.deposit_required}` : null],
                 ['Deposit Rcvd', job.deposit_received ? '✓ Yes' : null],
