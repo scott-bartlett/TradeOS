@@ -69,7 +69,9 @@ export default function JobsPage() {
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{job.title}</p>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {job.job_number} · {job.vertical?.toUpperCase()} · {new Date(job.created_at).toLocaleDateString()}
+                        {job.customer_name && `${job.customer_name} · `}
+                        {job.service_city && `${job.service_city} · `}
+                        {job.vertical?.toUpperCase()}
                       </p>
                     </div>
                   </div>
