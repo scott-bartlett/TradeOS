@@ -150,6 +150,9 @@ export default function InvoicesPage() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{inv.invoice_number}</p>
+                        {inv.customer_name && (
+                          <p className="text-xs text-gray-600 mt-0.5">{inv.customer_name}</p>
+                        )}
                         <p className="text-xs text-gray-400 mt-0.5">
                           {inv.sent_at
                           ? `Sent ${formatDate(inv.sent_at)}`

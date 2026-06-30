@@ -358,33 +358,50 @@ async def list_invoices(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
+    from app.models.customer import Customer
+
     query = select(Invoice).order_by(Invoice.created_at.desc())
     if status:
         query = query.where(Invoice.status == InvoiceStatus(status))
     result = await db.execute(query)
     invoices = result.scalars().all()
 
-    return {
-        "invoices": [
-            {
-                "invoice_id": str(i.id),
-                "invoice_number": i.invoice_number,
-                "job_id": str(i.job_id),
-                "status": i.status,
-                "total_amount": float(i.total_amount),
-                "balance_due": float(i.balance_due) if i.balance_due else None,
-                "amount_paid": float(i.amount_paid) if i.amount_paid else 0,
-                "sent_at": i.sent_at.isoformat() if i.sent_at else None,
-                "due_date": i.due_date.isoformat() if i.due_date else None,
-                "paid_at": i.paid_at.isoformat() if i.paid_at else None,
-                "diana_approved": i.diana_approved,
-                "created_at": i.created_at.isoformat(),
-            }
-            for i in invoices
-        ],
-        "total": len(invoices)
-    }
+    invoice_list = []
+    for i in invoices:
+        # Get customer name via job
+        customer_name = None
+        job_title = None
+        if i.job_id:
+            job_result = await db.execute(select(Job).where(Job.id == i.job_id))
+            job = job_result.scalar_one_or_none()
+            if job:
+                job_title = job.title
+                if job.customer_id:
+                    c_result = await db.execute(
+                        select(Customer).where(Customer.id == job.customer_id)
+                    )
+                    customer = c_result.scalar_one_or_none()
+                    if customer:
+                        customer_name = customer.display_name
 
+        invoice_list.append({
+            "invoice_id": str(i.id),
+            "invoice_number": i.invoice_number,
+            "job_id": str(i.job_id),
+            "job_title": job_title,
+            "customer_name": customer_name,
+            "status": i.status,
+            "total_amount": float(i.total_amount),
+            "balance_due": float(i.balance_due) if i.balance_due else None,
+            "amount_paid": float(i.amount_paid) if i.amount_paid else 0,
+            "sent_at": i.sent_at.isoformat() if i.sent_at else None,
+            "due_date": i.due_date.isoformat() if i.due_date else None,
+            "paid_at": i.paid_at.isoformat() if i.paid_at else None,
+            "diana_approved": i.diana_approved,
+            "created_at": i.created_at.isoformat(),
+        })
+
+    return {"invoices": invoice_list, "total": len(invoice_list)}
 
 # ── GET INVOICE ───────────────────────────────────────────────────────────────
 

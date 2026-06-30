@@ -358,6 +358,7 @@ export default function DashboardPage() {
                           </div>
                           <div>
                             <p className="text-sm font-medium text-gray-900">{inv.invoice_number}</p>
+                            <p className="text-xs text-gray-600">{inv.customer_name || inv.job_title}</p>
                             <p className="text-xs text-gray-400">
                               {inv.sent_at ? `Sent ${formatDate(inv.sent_at)}` : 'Draft'}
                               {inv.due_date && ` · Due ${formatDate(inv.due_date)}`}
