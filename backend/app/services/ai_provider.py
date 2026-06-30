@@ -106,13 +106,13 @@ async def analyze_photo(photo_url: str) -> dict:
     )
 
     raw = message.content[0].text.strip()
-if raw.startswith("```"):
-    raw = raw.split("```")[1]
-    if raw.startswith("json"):
-        raw = raw[4:]
-    raw = raw.rsplit("```", 1)[0]
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.rsplit("```", 1)[0]
 
-return json.loads(raw.strip())
+    return json.loads(raw.strip())
 
 
 # ── SUPPLY LIST GENERATION ────────────────────────────────────────────────────
@@ -340,7 +340,7 @@ Return ONLY a JSON array of flags (no markdown), maximum 5 flags, most important
 
     message = client.messages.create(
         model=settings.anthropic_model,
-        max_tokens=1024,
+        max_tokens=2048,
         messages=[{"role": "user", "content": prompt}]
     )
 
@@ -349,6 +349,7 @@ Return ONLY a JSON array of flags (no markdown), maximum 5 flags, most important
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
+        raw = raw.rsplit("```", 1)[0]
 
     return json.loads(raw.strip())
 # ── GENERIC TEXT RESPONSE ─────────────────────────────────────────────────────
