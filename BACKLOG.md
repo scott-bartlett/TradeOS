@@ -57,8 +57,27 @@ Last updated: June 29, 2026
 
 ---
 
+## Admin & Auth
+
+- [ ] **Authentication** — login system required before any role enforcement is possible. Clerk integration is already stubbed in the User model (`clerk_id` field exists). This is the foundation everything else depends on.
+
+- [ ] **Role design** — small trades businesses don't need complex permissions. Proposed roles:
+  - `owner` — full access including admin, financials, all reports
+  - `office` — Jamie persona. Full access to all flows including field app (office staff sometimes work in the field)
+  - `tech` — Marcus persona. Field app + view their own jobs. No pricing, no invoices
+  - `lead_tech` — Senior tech. Everything a tech can do plus can approve change orders in the field, view supply lists
+  - `quoter` — Can build quotes and send them, but not approve or invoice. Useful for sales-oriented roles
+  - Note: roles are additive, not restrictive — e.g. office can use field app, lead_tech can do everything a tech can
+
+- [ ] **User management page** (`/dashboard/admin`) — list all users, add/edit/deactivate, assign roles. Only visible to `owner`. Backend API already complete — this is frontend only.
+
+- [ ] **Company settings** — default labor rate, markup %, company name for PDFs/emails. Part of admin page.
+
+---
+
 ## Notes
 
 - Keep field app online-only for MVP pilot. Offline is Phase 3.
 - QuickBooks is not MVP — Jamie manually flips payment status for now.
 - Dashboard AI flags need more job data before they're meaningful to test.
+- Admin page and auth intentionally deferred — no enforcement possible without login system.

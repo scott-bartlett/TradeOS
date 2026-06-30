@@ -83,7 +83,7 @@ async def analyze_photo(photo_url: str) -> dict:
 
     message = client.messages.create(
         model=settings.anthropic_model,
-        max_tokens=1024,
+        max_tokens=2048,
         messages=[
             {
                 "role": "user",
@@ -106,13 +106,13 @@ async def analyze_photo(photo_url: str) -> dict:
     )
 
     raw = message.content[0].text.strip()
-    # Strip any accidental markdown fences
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-    
-    return json.loads(raw.strip())
+if raw.startswith("```"):
+    raw = raw.split("```")[1]
+    if raw.startswith("json"):
+        raw = raw[4:]
+    raw = raw.rsplit("```", 1)[0]
+
+return json.loads(raw.strip())
 
 
 # ── SUPPLY LIST GENERATION ────────────────────────────────────────────────────
