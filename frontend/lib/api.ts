@@ -76,6 +76,8 @@ export const jobsApi = {
     api.get('/api/jobs/dashboard/summary').then(r => r.data),
   generateFlags: () =>
     api.post('/api/jobs/dashboard/flags').then(r => r.data),
+  getQuotePreview: (jobId: string) =>
+    api.get(`/api/jobs/${jobId}/quote-preview`).then(r => r.data),
 };
 
 // ── CUSTOMERS ─────────────────────────────────────────────────────────────────
@@ -151,6 +153,13 @@ export const invoicesApi = {
     api.post(`/api/invoices/${invoiceId}/mark-paid`, { amount_paid: amountPaid }).then(r => r.data),
   revertToDraft: (invoiceId: string) =>
     api.post(`/api/invoices/${invoiceId}/revert`).then(r => r.data),
+  getPreview: (invoiceId: string) =>
+    api.get(`/api/invoices/${invoiceId}/preview`).then(r => r.data),
+  sendWithNotes: (invoiceId: string, email: string, notes: string) =>
+    api.post(`/api/invoices/${invoiceId}/send`, {
+      customer_email: email,
+      customer_notes: notes || undefined,
+    }).then(r => r.data),
 };
 
 // ── USERS ─────────────────────────────────────────────────────────────────────

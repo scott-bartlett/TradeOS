@@ -51,194 +51,11 @@ class MarkPaidRequest(BaseModel):
 
 # ── PDF BUILDER ───────────────────────────────────────────────────────────────
 
-def _build_invoice_pdf(job: Job, invoice: Invoice, customer: Customer,
-                       supply_items: list, change_orders: list) -> bytes:
-    try:
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.styles import ParagraphStyle
-        from reportlab.lib.units import inch
-        from reportlab.lib import colors
-        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
-                                         Table, TableStyle, HRFlowable)
-
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter,
-                                rightMargin=0.75*inch, leftMargin=0.75*inch,
-                                topMargin=0.75*inch, bottomMargin=0.75*inch)
-
-        green = colors.HexColor('#1A6E45')
-        light_green = colors.HexColor('#E8F5EE')
-        gray = colors.HexColor('#6B7280')
-        dark = colors.HexColor('#111827')
-
-        story = []
-
-        bold22 = ParagraphStyle('bold22', fontSize=22, textColor=green,
-                                 fontName='Helvetica-Bold', spaceAfter=4)
-        normal = ParagraphStyle('normal', fontSize=10, textColor=dark,
-                                 fontName='Helvetica', spaceAfter=3)
-        small = ParagraphStyle('small', fontSize=9, textColor=gray,
-                                fontName='Helvetica', spaceAfter=2)
-        bold11 = ParagraphStyle('bold11', fontSize=11, textColor=dark,
-                                 fontName='Helvetica-Bold', spaceAfter=4)
-
-        # Header
-        story.append(Paragraph("TradeOS", bold22))
-        story.append(Paragraph("Professional HVAC Services", small))
-        story.append(Spacer(1, 0.1*inch))
-        story.append(HRFlowable(width="100%", thickness=2, color=green))
-        story.append(Spacer(1, 0.15*inch))
-
-        # Invoice meta + customer side by side
-        meta = [
-            ['INVOICE', 'BILL TO'],
-            [invoice.invoice_number, customer.display_name],
-            [f"Date: {datetime.utcnow().strftime('%B %d, %Y')}",
-             f"{customer.billing_street or ''}"],
-            [f"Due: {invoice.due_date.strftime('%B %d, %Y') if invoice.due_date else 'Net 30'}",
-             f"{customer.billing_city or ''}, {customer.billing_state or ''} {customer.billing_zip or ''}"],
-            [f"Job: {job.job_number}", customer.email or ''],
-        ]
-        mt = Table(meta, colWidths=[3*inch, 3.8*inch])
-        mt.setStyle(TableStyle([
-            ('FONTNAME',     (0,0), (-1,0), 'Helvetica-Bold'),
-            ('TEXTCOLOR',    (0,0), (-1,0), green),
-            ('FONTSIZE',     (0,0), (-1,-1), 9),
-            ('LEFTPADDING',  (0,0), (-1,-1), 0),
-            ('BOTTOMPADDING',(0,0), (-1,-1), 3),
-        ]))
-        story.append(mt)
-        story.append(Spacer(1, 0.2*inch))
-
-        # Job title
-        story.append(Paragraph(job.title, bold11))
-        if job.scope_of_work:
-            story.append(Paragraph(job.scope_of_work, small))
-        story.append(Spacer(1, 0.1*inch))
-
-        # Line items — materials (no unit cost shown to customer)
-        if supply_items:
-            story.append(Paragraph("Materials & Equipment", bold11))
-            data = [['Description', 'SKU', 'Qty', 'Unit']]
-            for item in supply_items:
-                qty = float(item.quantity)
-                data.append([
-                    item.description or '',
-                    item.sku or '—',
-                    str(int(qty) if qty == int(qty) else qty),
-                    item.unit or 'ea',
-                ])
-            t = Table(data, colWidths=[3.5*inch, 1.4*inch, 0.6*inch, 0.8*inch])
-            t.setStyle(TableStyle([
-                ('BACKGROUND',   (0,0), (-1,0), green),
-                ('TEXTCOLOR',    (0,0), (-1,0), colors.white),
-                ('FONTNAME',     (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTSIZE',     (0,0), (-1,-1), 8),
-                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, light_green]),
-                ('GRID',         (0,0), (-1,-1), 0.5, colors.HexColor('#E5E7EB')),
-                ('LEFTPADDING',  (0,0), (-1,-1), 6),
-                ('TOPPADDING',   (0,0), (-1,-1), 4),
-                ('BOTTOMPADDING',(0,0), (-1,-1), 4),
-            ]))
-            story.append(t)
-            story.append(Spacer(1, 0.15*inch))
-
-        # Labor
-        labor_hours = float(job.actual_hours or job.estimated_hours or 0)
-        labor_rate = float(job.labor_rate or 110)
-        if labor_hours > 0:
-            story.append(Paragraph("Labor", bold11))
-            ld = [['Description', 'Hours', 'Rate', 'Amount'],
-                  [f"HVAC Service — {job.title}",
-                   f"{labor_hours:.1f}",
-                   f"${labor_rate:.2f}/hr",
-                   f"${labor_hours * labor_rate:,.2f}"]]
-            lt = Table(ld, colWidths=[3.2*inch, 0.7*inch, 1*inch, 1.4*inch])
-            lt.setStyle(TableStyle([
-                ('BACKGROUND',   (0,0), (-1,0), green),
-                ('TEXTCOLOR',    (0,0), (-1,0), colors.white),
-                ('FONTNAME',     (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTSIZE',     (0,0), (-1,-1), 8),
-                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white]),
-                ('GRID',         (0,0), (-1,-1), 0.5, colors.HexColor('#E5E7EB')),
-                ('LEFTPADDING',  (0,0), (-1,-1), 6),
-                ('TOPPADDING',   (0,0), (-1,-1), 4),
-                ('BOTTOMPADDING',(0,0), (-1,-1), 4),
-                ('ALIGN',        (1,0), (-1,-1), 'RIGHT'),
-            ]))
-            story.append(lt)
-            story.append(Spacer(1, 0.15*inch))
-
-        # Change orders
-        if change_orders:
-            story.append(Paragraph("Additional Work", bold11))
-            cd = [['Description', 'Amount']]
-            for co in change_orders:
-                cd.append([f"CO #{co.co_number}: {co.description}",
-                           f"${float(co.additional_price or 0):,.2f}"])
-            ct = Table(cd, colWidths=[4.8*inch, 1.5*inch])
-            ct.setStyle(TableStyle([
-                ('BACKGROUND',   (0,0), (-1,0), green),
-                ('TEXTCOLOR',    (0,0), (-1,0), colors.white),
-                ('FONTNAME',     (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTSIZE',     (0,0), (-1,-1), 8),
-                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, light_green]),
-                ('GRID',         (0,0), (-1,-1), 0.5, colors.HexColor('#E5E7EB')),
-                ('LEFTPADDING',  (0,0), (-1,-1), 6),
-                ('TOPPADDING',   (0,0), (-1,-1), 4),
-                ('BOTTOMPADDING',(0,0), (-1,-1), 4),
-                ('ALIGN',        (1,0), (1,-1), 'RIGHT'),
-            ]))
-            story.append(ct)
-            story.append(Spacer(1, 0.15*inch))
-
-        # Totals
-        deposit = float(job.deposit_required or 0) if hasattr(job, 'deposit_required') else 0
-        total = float(invoice.total_amount)
-        balance = float(invoice.balance_due or total)
-
-        totals = [['Subtotal', f"${float(invoice.subtotal or total):,.2f}"]]
-        if deposit > 0:
-            totals.append(['Deposit Received', f"-${deposit:,.2f}"])
-        totals.append(['Tax', f"${float(invoice.tax_amount or 0):,.2f}"])
-        totals.append(['BALANCE DUE', f"${balance:,.2f}"])
-
-        tt = Table(totals, colWidths=[4.8*inch, 1.5*inch])
-        tt.setStyle(TableStyle([
-            ('FONTSIZE',     (0,0), (-1,-1), 9),
-            ('FONTNAME',     (0,-1), (-1,-1), 'Helvetica-Bold'),
-            ('FONTSIZE',     (0,-1), (-1,-1), 11),
-            ('TEXTCOLOR',    (0,-1), (-1,-1), green),
-            ('ALIGN',        (1,0), (1,-1), 'RIGHT'),
-            ('LEFTPADDING',  (0,0), (-1,-1), 4),
-            ('BOTTOMPADDING',(0,0), (-1,-1), 4),
-            ('LINEABOVE',    (0,-1), (-1,-1), 1, green),
-        ]))
-        story.append(tt)
-        story.append(Spacer(1, 0.2*inch))
-
-        # Footer
-        story.append(HRFlowable(width="100%", thickness=1,
-                                 color=colors.HexColor('#E5E7EB')))
-        story.append(Spacer(1, 0.1*inch))
-        footer = ParagraphStyle('footer', fontSize=8, textColor=gray,
-                                 fontName='Helvetica')
-        story.append(Paragraph(
-            "Payment due within 30 days. Thank you for your business.",
-            footer
-        ))
-
-        doc.build(story)
-        return buffer.getvalue()
-
-    except ImportError:
-        lines = [
-            f"INVOICE {invoice.invoice_number}",
-            f"Job: {job.job_number} — {job.title}",
-            f"Total: ${invoice.total_amount:,.2f}",
-            f"Due: {invoice.due_date.strftime('%B %d, %Y') if invoice.due_date else 'Net 30'}",
-        ]
-        return "\n".join(lines).encode()
+def _build_invoice_pdf(job, invoice, customer, supply_items, change_orders,
+                       ai_summary=None, customer_notes=None, service_location=None):
+    from app.services.pdf_builders import build_invoice_pdf
+    return build_invoice_pdf(job, invoice, customer, service_location,
+                             supply_items, change_orders, ai_summary, customer_notes)
 
 
 async def _send_email(to: str, subject: str, body: str,
@@ -402,6 +219,75 @@ async def list_invoices(
         })
 
     return {"invoices": invoice_list, "total": len(invoice_list)}
+
+@router.get("/{invoice_id}/preview")
+async def get_invoice_preview(invoice_id: str, db: AsyncSession = Depends(get_db)):
+    from app.models.customer import Customer, ServiceLocation
+    from app.models.supply_and_field import JobSupplyItem, ChangeOrder, FieldNote
+    from app.models.job import Job
+
+    result = await db.execute(select(Invoice).where(Invoice.id == uuid.UUID(invoice_id)))
+    invoice = result.scalar_one_or_none()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    job_result = await db.execute(select(Job).where(Job.id == invoice.job_id))
+    job = job_result.scalar_one_or_none()
+
+    customer = None
+    location = None
+    if job:
+        if job.customer_id:
+            c_result = await db.execute(select(Customer).where(Customer.id == job.customer_id))
+            customer = c_result.scalar_one_or_none()
+        if job.service_location_id:
+            l_result = await db.execute(select(ServiceLocation).where(ServiceLocation.id == job.service_location_id))
+            location = l_result.scalar_one_or_none()
+
+    items_result = await db.execute(select(JobSupplyItem).where(JobSupplyItem.job_id == invoice.job_id))
+    supply_items = items_result.scalars().all()
+
+    co_result = await db.execute(select(ChangeOrder).where(ChangeOrder.job_id == invoice.job_id))
+    change_orders = co_result.scalars().all()
+
+    notes_result = await db.execute(select(FieldNote).where(FieldNote.job_id == invoice.job_id).order_by(FieldNote.created_at))
+    field_notes = notes_result.scalars().all()
+
+    ai_summary = None
+    try:
+        from app.services.ai_provider import get_ai_response
+        notes_text = " | ".join([n.note_text for n in field_notes[-5:]]) if field_notes else ""
+        materials_text = ", ".join([i.description for i in supply_items[:8]]) if supply_items else ""
+        cos_text = "; ".join([f"CO#{co.co_number}: {co.description}" for co in change_orders if co.status == "approved"])
+        prompt = f"""Write a 2-3 sentence professional summary of completed work for a customer invoice.
+Job: {job.title if job else "Electrical service"}
+Scope: {job.scope_of_work if job else ""}
+Materials used: {materials_text}
+Field notes: {notes_text}
+Change orders: {cos_text}
+Write from the contractor's perspective, past tense. No pricing. No bullet points.
+Return only the summary paragraph."""
+        ai_summary = await get_ai_response(prompt, max_tokens=256)
+    except Exception:
+        ai_summary = f"Work completed for {job.title if job else 'electrical service'}."
+
+    return {
+        "invoice_id": str(invoice.id),
+        "invoice_number": invoice.invoice_number,
+        "status": invoice.status,
+        "total_amount": float(invoice.total_amount or 0),
+        "balance_due": float(invoice.balance_due or invoice.total_amount or 0),
+        "amount_paid": float(invoice.amount_paid or 0),
+        "tax_amount": float(invoice.tax_amount or 0),
+        "sent_at": invoice.sent_at.isoformat() if invoice.sent_at else None,
+        "diana_approved": invoice.diana_approved,
+        "ai_summary": ai_summary,
+        "job": {"job_id": str(job.id), "title": job.title, "scope_of_work": job.scope_of_work, "labor_hours": float(job.actual_hours or job.estimated_hours or 0), "deposit_required": float(job.deposit_required or 0)} if job else None,
+        "customer": {"display_name": customer.display_name, "email": customer.email or "", "billing_street": customer.billing_street or "", "billing_city": customer.billing_city or "", "billing_state": customer.billing_state or "", "billing_zip": customer.billing_zip or ""} if customer else None,
+        "service_location": {"street": location.street or "", "city": location.city or "", "state": location.state or ""} if location else None,
+        "supply_items": [{"description": i.description, "sku": i.sku, "quantity": float(i.quantity), "unit": i.unit} for i in supply_items],
+        "change_orders": [{"co_number": co.co_number, "description": co.description, "status": co.status, "additional_price": float(co.additional_price or 0)} for co in change_orders if co.status == "approved"],
+    }
 
 # ── GET INVOICE ───────────────────────────────────────────────────────────────
 

@@ -103,162 +103,13 @@ class SupplyItemUpdate(BaseModel):
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
-def _build_quote_pdf(job: Job, supply_items: list, quote_total: float,
-                     estimated_hours: float, labor_rate: float) -> bytes:
-    """Generate customer-facing quote PDF. Never shows unit costs."""
-    try:
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import inch
-        from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-        from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
-
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter,
-                                rightMargin=0.75*inch, leftMargin=0.75*inch,
-                                topMargin=0.75*inch, bottomMargin=0.75*inch)
-
-        green = colors.HexColor('#1A6E45')
-        light_green = colors.HexColor('#E8F5EE')
-        gray = colors.HexColor('#6B7280')
-        dark = colors.HexColor('#111827')
-
-        styles = getSampleStyleSheet()
-        story = []
-
-        # Header
-        header_style = ParagraphStyle('header', fontSize=22, textColor=green,
-                                       fontName='Helvetica-Bold', spaceAfter=4)
-        sub_style = ParagraphStyle('sub', fontSize=10, textColor=gray,
-                                    fontName='Helvetica', spaceAfter=2)
-        story.append(Paragraph("TradeOS", header_style))
-        story.append(Paragraph("Professional HVAC Services", sub_style))
-        story.append(Paragraph(f"Quote #{job.quote_number or job.job_number}", sub_style))
-        story.append(Spacer(1, 0.15*inch))
-        story.append(HRFlowable(width="100%", thickness=2, color=green))
-        story.append(Spacer(1, 0.15*inch))
-
-        # Job info
-        info_style = ParagraphStyle('info', fontSize=10, textColor=dark,
-                                     fontName='Helvetica', spaceAfter=4)
-        bold_style = ParagraphStyle('bold', fontSize=11, textColor=dark,
-                                     fontName='Helvetica-Bold', spaceAfter=4)
-        story.append(Paragraph(job.title, bold_style))
-        story.append(Paragraph(f"Date: {datetime.utcnow().strftime('%B %d, %Y')}", info_style))
-        story.append(Paragraph(f"Valid for {job.quote_valid_days or 30} days", info_style))
-        story.append(Spacer(1, 0.15*inch))
-
-        # Scope
-        if job.scope_of_work:
-            story.append(Paragraph("Scope of Work", bold_style))
-            story.append(Paragraph(job.scope_of_work, info_style))
-            story.append(Spacer(1, 0.1*inch))
-
-        # Materials (description + qty only — no costs)
-        if supply_items:
-            story.append(Paragraph("Materials & Equipment", bold_style))
-            table_data = [['Description', 'SKU', 'Qty', 'Unit']]
-            for item in supply_items:
-                table_data.append([
-                    item.description or '',
-                    item.sku or '—',
-                    str(int(item.quantity) if item.quantity == int(item.quantity) else item.quantity),
-                    item.unit or 'ea',
-                ])
-            t = Table(table_data, colWidths=[3.2*inch, 1.4*inch, 0.6*inch, 0.6*inch])
-            t.setStyle(TableStyle([
-                ('BACKGROUND',   (0,0), (-1,0), green),
-                ('TEXTCOLOR',    (0,0), (-1,0), colors.white),
-                ('FONTNAME',     (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTSIZE',     (0,0), (-1,-1), 9),
-                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, light_green]),
-                ('GRID',         (0,0), (-1,-1), 0.5, colors.HexColor('#E5E7EB')),
-                ('LEFTPADDING',  (0,0), (-1,-1), 8),
-                ('RIGHTPADDING', (0,0), (-1,-1), 8),
-                ('TOPPADDING',   (0,0), (-1,-1), 5),
-                ('BOTTOMPADDING',(0,0), (-1,-1), 5),
-            ]))
-            story.append(t)
-            story.append(Spacer(1, 0.15*inch))
-
-        # Labor
-        story.append(Paragraph("Labor", bold_style))
-        labor_data = [
-            ['Estimated Hours', f"{estimated_hours} hrs"],
-            ['Labor Rate',      f"${labor_rate:.2f}/hr"],
-            ['Labor Subtotal',  f"${estimated_hours * labor_rate:,.2f}"],
-        ]
-        lt = Table(labor_data, colWidths=[3*inch, 2*inch])
-        lt.setStyle(TableStyle([
-            ('FONTSIZE',     (0,0), (-1,-1), 9),
-            ('FONTNAME',     (0,1), (-1,-1), 'Helvetica'),
-            ('FONTNAME',     (0,2), (-1,2), 'Helvetica-Bold'),
-            ('TEXTCOLOR',    (0,0), (-1,-1), dark),
-            ('LEFTPADDING',  (0,0), (-1,-1), 4),
-            ('BOTTOMPADDING',(0,0), (-1,-1), 4),
-        ]))
-        story.append(lt)
-        story.append(Spacer(1, 0.2*inch))
-
-        # Total box
-        total_data = [['TOTAL QUOTE', f"${quote_total:,.2f}"]]
-        tt = Table(total_data, colWidths=[4.5*inch, 1.3*inch])
-        tt.setStyle(TableStyle([
-            ('BACKGROUND',   (0,0), (-1,-1), green),
-            ('TEXTCOLOR',    (0,0), (-1,-1), colors.white),
-            ('FONTNAME',     (0,0), (-1,-1), 'Helvetica-Bold'),
-            ('FONTSIZE',     (0,0), (-1,-1), 14),
-            ('ALIGN',        (1,0), (1,0), 'RIGHT'),
-            ('LEFTPADDING',  (0,0), (-1,-1), 12),
-            ('RIGHTPADDING', (0,0), (-1,-1), 12),
-            ('TOPPADDING',   (0,0), (-1,-1), 10),
-            ('BOTTOMPADDING',(0,0), (-1,-1), 10),
-        ]))
-        story.append(tt)
-        story.append(Spacer(1, 0.2*inch))
-
-        # Payment link placeholder
-        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#E5E7EB')))
-        story.append(Spacer(1, 0.1*inch))
-        pay_style = ParagraphStyle('pay', fontSize=10, textColor=green,
-                                    fontName='Helvetica-Bold', alignment=TA_CENTER)
-        story.append(Paragraph("To approve this quote and make a deposit, visit:", pay_style))
-        link_style = ParagraphStyle('link', fontSize=10, textColor=gray,
-                                     fontName='Helvetica', alignment=TA_CENTER)
-        story.append(Paragraph(f"[Payment link — coming soon]", link_style))
-        story.append(Spacer(1, 0.15*inch))
-
-        # Footer
-        footer_style = ParagraphStyle('footer', fontSize=8, textColor=gray,
-                                       fontName='Helvetica', alignment=TA_CENTER)
-        story.append(Paragraph(
-            "This quote is valid for the period stated above. Prices subject to change after expiry. "
-            "Thank you for your business.",
-            footer_style
-        ))
-
-        doc.build(story)
-        return buffer.getvalue()
-
-    except ImportError:
-        # Fallback plain text if reportlab not installed
-        lines = [
-            f"QUOTE — {job.title}",
-            f"Quote #: {job.quote_number or job.job_number}",
-            f"Date: {datetime.utcnow().strftime('%B %d, %Y')}",
-            "",
-            "MATERIALS:",
-        ]
-        for item in supply_items:
-            lines.append(f"  {item.description} — qty {item.quantity} {item.unit or 'ea'}")
-        lines += [
-            "",
-            f"LABOR: {estimated_hours} hrs @ ${labor_rate}/hr",
-            f"TOTAL: ${quote_total:,.2f}",
-        ]
-        return "\n".join(lines).encode()
-
+def _build_quote_pdf(job, supply_items, quote_total, estimated_hours, labor_rate,
+                     customer=None, service_location=None,
+                     ai_summary=None, customer_notes=None, change_orders=None):
+    from app.services.pdf_builders import build_quote_pdf
+    return build_quote_pdf(job, supply_items, quote_total, estimated_hours,
+                           labor_rate, customer, service_location,
+                           ai_summary, customer_notes, change_orders)
 
 def _build_po_pdf(job: Job, supply_items: list) -> bytes:
     """Generate purchase order PDF for supplier."""
@@ -601,6 +452,78 @@ async def get_job(job_id: str, db: AsyncSession = Depends(get_db)):
         "deposit_received": job.deposit_received or False,
         "scheduled_date": job.scheduled_date.isoformat() if job.scheduled_date else None,
         "created_at": job.created_at.isoformat(), "updated_at": job.updated_at.isoformat()
+    }
+
+@router.get("/{job_id}/quote-preview")
+async def get_quote_preview(job_id: str, db: AsyncSession = Depends(get_db)):
+    from app.models.customer import Customer, ServiceLocation
+    from app.models.supply_and_field import JobSupplyItem, ChangeOrder
+
+    result = await db.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    customer = None
+    if job.customer_id:
+        c_result = await db.execute(select(Customer).where(Customer.id == job.customer_id))
+        customer = c_result.scalar_one_or_none()
+
+    location = None
+    if job.service_location_id:
+        l_result = await db.execute(select(ServiceLocation).where(ServiceLocation.id == job.service_location_id))
+        location = l_result.scalar_one_or_none()
+
+    items_result = await db.execute(select(JobSupplyItem).where(JobSupplyItem.job_id == uuid.UUID(job_id)))
+    supply_items = items_result.scalars().all()
+
+    co_result = await db.execute(select(ChangeOrder).where(ChangeOrder.job_id == uuid.UUID(job_id)))
+    change_orders = co_result.scalars().all()
+
+    ai_summary = None
+    try:
+        from app.services.ai_provider import get_ai_response
+        materials_text = ", ".join([i.description for i in supply_items[:10]]) if supply_items else "to be determined"
+        prompt = f"""Write a 2-3 sentence professional summary for a customer quote.
+Job: {job.title}
+Scope: {job.scope_of_work or "Electrical service work"}
+Materials: {materials_text}
+Estimated hours: {float(job.estimated_hours or 0):.1f}
+Write from the contractor's perspective describing what will be done.
+Be specific but not technical. No pricing. No bullet points.
+Return only the summary paragraph."""
+        ai_summary = await get_ai_response(prompt, max_tokens=256)
+    except Exception:
+        ai_summary = job.scope_of_work or f"Professional electrical service for {job.title}."
+
+    return {
+        "job_id": str(job.id),
+        "job_number": job.job_number,
+        "quote_number": job.quote_number or f"Q-{job.job_number}",
+        "title": job.title,
+        "status": job.status,
+        "scope_of_work": job.scope_of_work,
+        "ai_summary": ai_summary,
+        "estimated_hours": float(job.estimated_hours or 0),
+        "labor_rate": float(job.labor_rate or 110),
+        "quote_total": float(job.quote_total or 0),
+        "deposit_required": float(job.deposit_required or 0),
+        "quote_valid_days": job.quote_valid_days or 30,
+        "customer": {
+            "display_name": customer.display_name,
+            "email": customer.email or "",
+            "billing_street": customer.billing_street or "",
+            "billing_city": customer.billing_city or "",
+            "billing_state": customer.billing_state or "",
+            "billing_zip": customer.billing_zip or "",
+        } if customer else None,
+        "service_location": {
+            "street": location.street or "",
+            "city": location.city or "",
+            "state": location.state or "",
+        } if location else None,
+        "supply_items": [{"description": i.description, "sku": i.sku, "quantity": float(i.quantity), "unit": i.unit} for i in supply_items],
+        "change_orders": [{"co_number": co.co_number, "description": co.description, "status": co.status} for co in change_orders if co.status == "approved"],
     }
 
 # ── UPDATE STATUS ─────────────────────────────────────────────────────────────
