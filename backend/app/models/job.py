@@ -39,6 +39,7 @@ class Job(BaseModel):
     title         = Column(String(255), nullable=False)
     scope_of_work = Column(Text)
     ai_analysis   = Column(JSONB)
+    ai_quote_summary = Column(Text)   # cached AI summary for quote PDF
 
     scheduled_date  = Column(DateTime)
     arrival_window  = Column(String(50))

@@ -9,7 +9,7 @@ import { ArrowLeft, Send, Sparkles } from 'lucide-react';
 
 // ── PDF PREVIEW RENDERER ──────────────────────────────────────────────────────
 
-function InvoicePDFPreview({ data, notes }: { data: any; notes: string }) {
+function InvoicePDFPreview({ data, notes, summary }: { data: any; notes: string; summary: string }) {
   const company = {
     name: "Alki Electric",
     address: "Seattle, WA",
@@ -79,12 +79,12 @@ function InvoicePDFPreview({ data, notes }: { data: any; notes: string }) {
       <div className="px-10"><hr className="border-gray-100" /></div>
 
       {/* AI Summary */}
-      {data.ai_summary && (
+      {summary && (
         <div className="px-10 py-5">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
             Work Completed
           </p>
-          <p className="text-sm text-gray-700 leading-relaxed">{data.ai_summary}</p>
+          <p className="text-sm text-gray-700 leading-relaxed">{summary}</p>
         </div>
       )}
 
@@ -210,19 +210,22 @@ export default function InvoicePreviewPage() {
 
   const [notes, setNotes] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [editableSummary, setEditableSummary] = useState('');
+  const [summaryEdited, setSummaryEdited] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['invoice-preview', invoiceId],
     queryFn: () => invoicesApi.getPreview(invoiceId),
   });
 
-  // Auto-populate email when data loads
+  // Auto-populate email and summary when data loads
   useEffect(() => {
     if (data?.customer?.email) setCustomerEmail(data.customer.email);
-  }, [data?.customer?.email]);
+    if (data?.ai_summary && !summaryEdited) setEditableSummary(data.ai_summary);
+  }, [data?.customer?.email, data?.ai_summary]);
 
   const sendMutation = useMutation({
-    mutationFn: () => invoicesApi.sendWithNotes(invoiceId, customerEmail, notes),
+    mutationFn: () => invoicesApi.sendWithNotes(invoiceId, customerEmail, notes, editableSummary),
     onSuccess: () => router.push(`/dashboard/invoices/${invoiceId}`),
   });
 
@@ -265,7 +268,7 @@ export default function InvoicePreviewPage() {
       <div className="max-w-6xl mx-auto px-6 py-6 grid grid-cols-3 gap-6">
         {/* Left — preview */}
         <div className="col-span-2">
-          <InvoicePDFPreview data={data} notes={notes} />
+          <InvoicePDFPreview data={data} notes={notes} summary={editableSummary} />
         </div>
 
         {/* Right — send panel */}
@@ -285,6 +288,19 @@ export default function InvoicePreviewPage() {
               {data?.customer?.email && customerEmail === data.customer.email && (
                 <p className="text-xs text-gray-400 mt-0.5">From customer record</p>
               )}
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500">AI Summary — Edit if needed</label>
+              <p className="text-xs text-gray-400 mb-1">
+                This appears as "Work Completed" on the PDF.
+              </p>
+              <textarea
+                rows={4}
+                value={editableSummary}
+                onChange={e => { setEditableSummary(e.target.value); setSummaryEdited(true); }}
+                className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] resize-none"
+              />
             </div>
 
             <div>

@@ -9,7 +9,7 @@ import { ArrowLeft, Send, Download, Sparkles } from 'lucide-react';
 
 // ── PDF PREVIEW RENDERER ──────────────────────────────────────────────────────
 
-function QuotePDFPreview({ data, notes }: { data: any; notes: string }) {
+function QuotePDFPreview({ data, notes, summary }: { data: any; notes: string; summary: string }) {
   const company = {
     name: "Alki Electric",
     address: "Seattle, WA",
@@ -80,12 +80,12 @@ function QuotePDFPreview({ data, notes }: { data: any; notes: string }) {
       </div>
 
       {/* AI Summary */}
-      {data.ai_summary && (
+      {summary && (
         <div className="px-10 py-5">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
             About This Quote
           </p>
-          <p className="text-sm text-gray-700 leading-relaxed">{data.ai_summary}</p>
+          <p className="text-sm text-gray-700 leading-relaxed">{summary}</p>
         </div>
       )}
 
@@ -157,21 +157,29 @@ function QuotePDFPreview({ data, notes }: { data: any; notes: string }) {
       <div className="px-10 pb-5">
         <hr className="border-gray-200 mb-3" />
         <div className="flex flex-col items-end gap-1">
-          <div className="flex justify-between w-48">
-            <span className="text-sm font-bold">Quote Total</span>
-            <span className="text-base font-bold">${data.quote_total?.toLocaleString()}</span>
-          </div>
-          {data.deposit_required > 0 && (
+          {data.quote_total > 0 ? (
             <>
-              <div className="flex justify-between w-48 text-xs text-gray-500">
-                <span>Deposit Required</span>
-                <span>${data.deposit_required?.toLocaleString()}</span>
+              <div className="flex justify-between w-48">
+                <span className="text-sm font-bold">Quote Total</span>
+                <span className="text-base font-bold">${Number(data.quote_total).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
               </div>
-              <div className="flex justify-between w-48 text-xs text-gray-500">
-                <span>Balance at Completion</span>
-                <span>${Math.max(0, data.quote_total - data.deposit_required).toLocaleString()}</span>
-              </div>
+              {data.deposit_required > 0 && (
+                <>
+                  <div className="flex justify-between w-48 text-xs text-gray-500">
+                    <span>Deposit Required</span>
+                    <span>${Number(data.deposit_required).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                  </div>
+                  <div className="flex justify-between w-48 text-xs text-gray-500">
+                    <span>Balance at Completion</span>
+                    <span>${Math.max(0, data.quote_total - data.deposit_required).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                  </div>
+                </>
+              )}
             </>
+          ) : (
+            <p className="text-xs text-amber-600 italic">
+              Save pricing on the job page before previewing totals
+            </p>
           )}
         </div>
       </div>
@@ -207,16 +215,19 @@ export default function QuotePreviewPage() {
 
   const [notes, setNotes] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [editableSummary, setEditableSummary] = useState('');
+  const [summaryEdited, setSummaryEdited] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['quote-preview', jobId],
     queryFn: () => jobsApi.getQuotePreview(jobId),
   });
 
-  // Auto-populate email when data loads
+  // Auto-populate email and summary when data loads
   useEffect(() => {
     if (data?.customer?.email) setCustomerEmail(data.customer.email);
-  }, [data?.customer?.email]);
+    if (data?.ai_summary && !summaryEdited) setEditableSummary(data.ai_summary);
+  }, [data?.customer?.email, data?.ai_summary]);
 
   const sendMutation = useMutation({
     mutationFn: () => jobsApi.sendQuote(jobId, {
@@ -225,6 +236,7 @@ export default function QuotePreviewPage() {
       estimated_hours: data.estimated_hours,
       labor_rate: data.labor_rate,
       notes: notes || undefined,
+      ai_summary: editableSummary || undefined,
     }),
     onSuccess: () => router.push(`/dashboard/jobs/${jobId}`),
   });
@@ -254,7 +266,7 @@ export default function QuotePreviewPage() {
       <div className="max-w-6xl mx-auto px-6 py-6 grid grid-cols-3 gap-6">
         {/* Left — PDF preview */}
         <div className="col-span-2">
-          <QuotePDFPreview data={data} notes={notes} />
+          <QuotePDFPreview data={data} notes={notes} summary={editableSummary} />
         </div>
 
         {/* Right — send panel */}
@@ -274,6 +286,19 @@ export default function QuotePreviewPage() {
               {data?.customer?.email && customerEmail === data.customer.email && (
                 <p className="text-xs text-gray-400 mt-0.5">From customer record</p>
               )}
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500">AI Summary — Edit if needed</label>
+              <p className="text-xs text-gray-400 mb-1">
+                This appears as "About This Quote" on the PDF.
+              </p>
+              <textarea
+                rows={4}
+                value={editableSummary}
+                onChange={e => { setEditableSummary(e.target.value); setSummaryEdited(true); }}
+                className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] resize-none"
+              />
             </div>
 
             <div>

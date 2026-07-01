@@ -155,10 +155,11 @@ export const invoicesApi = {
     api.post(`/api/invoices/${invoiceId}/revert`).then(r => r.data),
   getPreview: (invoiceId: string) =>
     api.get(`/api/invoices/${invoiceId}/preview`).then(r => r.data),
-  sendWithNotes: (invoiceId: string, email: string, notes: string) =>
+  sendWithNotes: (invoiceId: string, email: string, notes: string, summary?: string) =>
     api.post(`/api/invoices/${invoiceId}/send`, {
       customer_email: email,
       customer_notes: notes || undefined,
+      ai_summary: summary || undefined,
     }).then(r => r.data),
 };
 

@@ -79,7 +79,9 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
       estimated_hours: parseFloat(hours) || undefined,
       labor_rate: parseFloat(rate) || undefined,
       material_markup: parseFloat(markup) || undefined,
-      quote_total: overriding ? parseFloat(quoteTotalOverride) || undefined : undefined,
+      quote_total: overriding
+        ? parseFloat(quoteTotalOverride) || suggestedTotal
+        : suggestedTotal,
       deposit_required: parseFloat(depositAmount) || undefined,
     }),
     onSuccess: invalidateJob,
