@@ -125,7 +125,7 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
 
         {/* ── Pricing inputs ── */}
         <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <label className="text-xs text-gray-500 font-medium">Est. Hours</label>
               <input
@@ -146,15 +146,37 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
                 className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-xs text-gray-500 font-medium">Markup %</label>
-              <input
-                type="number"
-                value={markup}
-                onChange={e => setMarkup(e.target.value)}
-                placeholder="30"
-                className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
-              />
+          </div>
+          {/* Markup slider */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-gray-500 font-medium">Material Markup</label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  value={markup}
+                  onChange={e => setMarkup(e.target.value)}
+                  className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] text-right"
+                />
+                <span className="text-xs text-gray-500">%</span>
+              </div>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="60"
+              step="5"
+              value={markup}
+              onChange={e => setMarkup(e.target.value)}
+              className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, #1A6E45 0%, #1A6E45 ${(parseFloat(markup) / 60) * 100}%, #e5e7eb ${(parseFloat(markup) / 60) * 100}%, #e5e7eb 100%)`
+              }}
+            />
+            <div className="flex justify-between text-xs text-gray-300">
+              <span>0%</span>
+              <span>30%</span>
+              <span>60%</span>
             </div>
           </div>
         </div>
@@ -182,6 +204,9 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
                 ${grossProfit.toFixed(2)} ({marginPct.toFixed(0)}%)
               </span>
             </div>
+            <p className="text-xs text-gray-400 mt-1 italic">
+              Labor rate includes tech overhead &amp; profit
+            </p>
           </div>
         </div>
 
