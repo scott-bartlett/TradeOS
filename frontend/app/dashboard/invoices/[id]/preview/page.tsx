@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { invoicesApi } from '@/lib/api';
@@ -214,10 +214,12 @@ export default function InvoicePreviewPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['invoice-preview', invoiceId],
     queryFn: () => invoicesApi.getPreview(invoiceId),
-    onSuccess: (d: any) => {
-      if (d.customer?.email) setCustomerEmail(d.customer.email);
-    },
   });
+
+  // Auto-populate email when data loads
+  useEffect(() => {
+    if (data?.customer?.email) setCustomerEmail(data.customer.email);
+  }, [data?.customer?.email]);
 
   const sendMutation = useMutation({
     mutationFn: () => invoicesApi.sendWithNotes(invoiceId, customerEmail, notes),

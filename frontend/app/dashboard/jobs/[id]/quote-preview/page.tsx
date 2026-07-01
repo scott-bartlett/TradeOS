@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { jobsApi } from '@/lib/api';
@@ -211,10 +211,12 @@ export default function QuotePreviewPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['quote-preview', jobId],
     queryFn: () => jobsApi.getQuotePreview(jobId),
-    onSuccess: (d: any) => {
-      if (d.customer?.email) setCustomerEmail(d.customer.email);
-    },
   });
+
+  // Auto-populate email when data loads
+  useEffect(() => {
+    if (data?.customer?.email) setCustomerEmail(data.customer.email);
+  }, [data?.customer?.email]);
 
   const sendMutation = useMutation({
     mutationFn: () => jobsApi.sendQuote(jobId, {
