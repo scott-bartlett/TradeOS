@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Calculator, Send, CheckCircle, ShoppingCart,
-  ChevronDown, ChevronUp, Lock, Unlock
+  Lock, Unlock, Phone
 } from 'lucide-react';
 import { formatDate } from '@/lib/date-utils';
 
@@ -20,7 +20,6 @@ interface Props {
 export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
   const queryClient = useQueryClient();
 
-  // Pricing fields
   const [hours, setHours] = useState<string>(job.estimated_hours?.toString() || '');
   const [rate, setRate] = useState<string>(job.labor_rate?.toString() || '110');
   const [markup, setMarkup] = useState<string>(job.material_markup?.toString() || '30');
@@ -29,16 +28,24 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
   );
   const [overriding, setOverriding] = useState(!!job.quote_total);
 
-  // Send quote form
   const [showSendForm, setShowSendForm] = useState(false);
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerEmail, setCustomerEmail] = useState(job.customer_email || '');
   const [quoteNotes, setQuoteNotes] = useState('');
 
-  // Deposit
   const [depositAmount, setDepositAmount] = useState<string>(
     job.deposit_required?.toString() || ''
   );
   const [depositReceived, setDepositReceived] = useState(job.deposit_received || false);
+
+  // Supply order state
+  const [poCalledIn, setPoCalledIn] = useState(false);
+
+  // Auto-populate email when job loads customer email
+  useEffect(() => {
+    if (job.customer_email && !customerEmail) {
+      setCustomerEmail(job.customer_email);
+    }
+  }, [job.customer_email]);
 
   const invalidateJob = () => queryClient.invalidateQueries({ queryKey: ['job', jobId] });
 
@@ -108,10 +115,8 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
   });
 
   const isQuoteSent = ['quoted', 'approved', 'scheduled', 'in_progress',
-                        'complete', 'invoiced', 'paid'].includes(job.status);
-  const isApproved = ['approved', 'scheduled', 'in_progress', 'complete',
-                       'invoiced', 'paid'].includes(job.status);
-  const poAlreadySent = supplyItems.some((i: any) => i.po_sent);
+                        'complete', 'ready_to_invoice', 'invoiced', 'paid'].includes(job.status);
+  const poAlreadySent = supplyItems.some((i: any) => i.po_sent) || poCalledIn;
 
   return (
     <Card>
@@ -147,6 +152,7 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
               />
             </div>
           </div>
+
           {/* Markup slider */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -174,14 +180,12 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
               }}
             />
             <div className="flex justify-between text-xs text-gray-300">
-              <span>0%</span>
-              <span>30%</span>
-              <span>60%</span>
+              <span>0%</span><span>30%</span><span>60%</span>
             </div>
           </div>
         </div>
 
-        {/* ── Cost breakdown (internal only) ── */}
+        {/* ── Cost breakdown ── */}
         <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
             Internal Breakdown
@@ -269,14 +273,20 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
                 </Button>
               ) : (
                 <div className="space-y-2">
-                  <input
-                    autoFocus
-                    type="email"
-                    value={customerEmail}
-                    onChange={e => setCustomerEmail(e.target.value)}
-                    placeholder="Customer email"
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
-                  />
+                  <div>
+                    <label className="text-xs text-gray-500">Customer Email</label>
+                    <input
+                      autoFocus
+                      type="email"
+                      value={customerEmail}
+                      onChange={e => setCustomerEmail(e.target.value)}
+                      placeholder="customer@email.com"
+                      className="mt-1 w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+                    />
+                    {job.customer_email && customerEmail === job.customer_email && (
+                      <p className="text-xs text-gray-400 mt-0.5">Auto-filled from customer record</p>
+                    )}
+                  </div>
                   <textarea
                     value={quoteNotes}
                     onChange={e => setQuoteNotes(e.target.value)}
@@ -293,12 +303,8 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
                     >
                       {sendQuoteMutation.isPending ? 'Sending...' : 'Send Quote'}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs h-8"
-                      onClick={() => setShowSendForm(false)}
-                    >
+                    <Button size="sm" variant="outline" className="text-xs h-8"
+                      onClick={() => setShowSendForm(false)}>
                       Cancel
                     </Button>
                   </div>
@@ -348,33 +354,46 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
 
         {/* ── Send Supply Order ── */}
         {isQuoteSent && (
-          <div className="border-t border-gray-100 pt-3">
+          <div className="border-t border-gray-100 pt-3 space-y-2">
+            <p className="text-xs font-semibold text-gray-700">Supply Order</p>
             {!depositReceived ? (
               <div className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                 <Lock size={12} className="text-gray-400 flex-shrink-0" />
                 <span className="text-xs text-gray-400">
-                  Supply order locked until deposit received
+                  Locked until deposit received
                 </span>
               </div>
             ) : poAlreadySent ? (
               <div className="flex items-center gap-2 py-2 px-3 bg-green-50 rounded-lg">
                 <CheckCircle size={13} className="text-green-500" />
-                <span className="text-xs text-green-700 font-medium">Supply order sent</span>
+                <span className="text-xs text-green-700 font-medium">
+                  Supply order sent to Johnstone
+                </span>
               </div>
             ) : (
-              <Button
-                size="sm"
-                className="w-full bg-[#1A6E45] hover:bg-[#145a38] text-xs"
-                onClick={() => sendPOMutation.mutate()}
-                disabled={sendPOMutation.isPending}
-              >
-                <ShoppingCart size={12} className="mr-2" />
-                {sendPOMutation.isPending ? 'Sending PO...' : 'Send Supply Order'}
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  size="sm"
+                  className="w-full bg-[#1A6E45] hover:bg-[#145a38] text-xs"
+                  onClick={() => sendPOMutation.mutate()}
+                  disabled={sendPOMutation.isPending}
+                >
+                  <ShoppingCart size={12} className="mr-2" />
+                  {sendPOMutation.isPending ? 'Sending PO...' : 'Send Supply Order'}
+                </Button>
+                {/* Called in manually */}
+                <button
+                  onClick={() => setPoCalledIn(true)}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 py-1.5 border border-dashed border-gray-200 rounded-lg"
+                >
+                  <Phone size={11} />
+                  Mark as Called In
+                </button>
+              </div>
             )}
             {sendPOMutation.isSuccess && (
               <p className="text-xs text-green-600 text-center mt-1">
-                ✓ {sendPOMutation.data?.message}
+                ✓ {sendPOMutation.data?.message || 'Supply order sent'}
               </p>
             )}
           </div>

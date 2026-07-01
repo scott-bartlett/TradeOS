@@ -8,7 +8,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { jobsApi, photosApi, changeOrdersApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Camera, FileText, AlertTriangle, Plus } from 'lucide-react';
+import { ArrowLeft, Camera, FileText, AlertTriangle, Plus, CheckCircle, Lock } from 'lucide-react';
 import { PhotoUpload } from '@/components/photo-upload';
 import { formatDate, formatTime } from '@/lib/date-utils';
 
@@ -285,15 +285,16 @@ function ChangeOrdersCard({ jobId, changeOrders }: { jobId: string; changeOrders
 }
 
 const statusColor: Record<string, string> = {
-  estimate:    'bg-gray-100 text-gray-700',
-  quoted:      'bg-blue-100 text-blue-700',
-  approved:    'bg-green-100 text-green-700',
-  scheduled:   'bg-purple-100 text-purple-700',
-  in_progress: 'bg-yellow-100 text-yellow-700',
-  complete:    'bg-emerald-100 text-emerald-700',
-  invoiced:    'bg-teal-100 text-teal-700',
-  paid:        'bg-green-100 text-green-800',
-  cancelled:   'bg-red-100 text-red-700',
+  estimate:         'bg-gray-100 text-gray-700',
+  quoted:           'bg-blue-100 text-blue-700',
+  approved:         'bg-green-100 text-green-700',
+  scheduled:        'bg-purple-100 text-purple-700',
+  in_progress:      'bg-yellow-100 text-yellow-700',
+  complete:         'bg-emerald-100 text-emerald-700',
+  ready_to_invoice: 'bg-teal-100 text-teal-800',
+  invoiced:         'bg-teal-100 text-teal-700',
+  paid:             'bg-green-100 text-green-800',
+  cancelled:        'bg-red-100 text-red-700',
 };
 
 export default function JobDetailPage() {
@@ -557,15 +558,44 @@ export default function JobDetailPage() {
               <CardTitle className="text-sm font-semibold text-gray-700">Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start text-xs"
-                onClick={() => router.push(`/dashboard/jobs/${jobId}/invoice`)}
-              >
-                <FileText size={13} className="mr-2" />
-                View / Build Invoice
-              </Button>
+              {/* Ready to Invoice button — shown when work is complete */}
+              {job.status === 'complete' && (
+                <Button
+                  className="w-full bg-teal-600 hover:bg-teal-700 text-xs justify-start"
+                  size="sm"
+                  onClick={() => {
+                    jobsApi.updateStatus(jobId, 'ready_to_invoice').then(() => {
+                      queryClient.invalidateQueries({ queryKey: ['job', jobId] });
+                    });
+                  }}
+                >
+                  <CheckCircle size={13} className="mr-2" />
+                  Mark Ready to Invoice
+                </Button>
+              )}
+
+              {/* Build Invoice — only when ready_to_invoice or beyond */}
+              {['ready_to_invoice', 'invoiced', 'paid'].includes(job.status) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-xs"
+                  onClick={() => router.push(`/dashboard/jobs/${jobId}/invoice`)}
+                >
+                  <FileText size={13} className="mr-2" />
+                  {job.status === 'invoiced' || job.status === 'paid'
+                    ? 'View Invoice'
+                    : 'Build Invoice'}
+                </Button>
+              )}
+
+              {/* Show a disabled hint when complete but not yet ready */}
+              {!['ready_to_invoice', 'invoiced', 'paid', 'complete'].includes(job.status) && (
+                <div className="flex items-center gap-2 py-2 px-3 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                  <Lock size={12} className="text-gray-400 flex-shrink-0" />
+                  <span className="text-xs text-gray-400">Invoice available after job is complete</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
