@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobsApi, usersApi, changeOrdersApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Save, AlertTriangle, Package, User, ChevronRight, Plus, PenLine } from 'lucide-react';
+import { Mic, MicOff, Save, AlertTriangle, Package, User, ChevronRight, Plus, PenLine, CheckCircle } from 'lucide-react';
 import { formatTime } from '@/lib/date-utils';
 
 // ── SIGNATURE PAD ─────────────────────────────────────────────────────────────
@@ -280,6 +280,123 @@ function FieldCOForm({ jobId, techId, onSuccess, onCancel }: {
   );
 }
 
+// ── CLOSE OUT FORM ────────────────────────────────────────────────────────────
+
+function CloseOutForm({ jobId, techId, onSuccess, onCancel }: {
+  jobId: string;
+  techId: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [note, setNote] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const toggleMic = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition ||
+                              (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) { alert('Use Chrome for voice'); return; }
+    if (isRecording) { recognitionRef.current?.stop(); setIsRecording(false); return; }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    let final = note ? note + ' ' : '';
+
+    recognition.onstart = () => setIsRecording(true);
+    recognition.onresult = (event: any) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) final += event.results[i][0].transcript + ' ';
+        else interim += event.results[i][0].transcript;
+      }
+      setNote(final + interim);
+    };
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => { if (isRecording) recognition.start(); };
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (note.trim()) {
+        await jobsApi.addFieldNote(jobId, {
+          note_text: note.trim(),
+          tech_id: techId,
+          note_type: 'close_out',
+          client_uuid: crypto.randomUUID(),
+          captured_at: new Date().toISOString(),
+        });
+      }
+      await jobsApi.updateStatus(jobId, 'complete');
+    },
+    onSuccess,
+  });
+
+  if (!confirmed) {
+    return (
+      <button
+        onClick={() => setConfirmed(true)}
+        className="w-full flex items-center justify-center gap-2 py-4 bg-[#1A6E45] rounded-xl text-white font-semibold text-sm hover:bg-[#145a38] transition-colors"
+      >
+        <CheckCircle size={18} />
+        Close Out Job
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <p className="text-sm font-semibold text-gray-900 mb-1">Close Out Job?</p>
+        <p className="text-xs text-gray-500">
+          This notifies the office the job is finished. Jamie can then build the invoice.
+        </p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs text-gray-500">Final note for the office (optional)</label>
+          <button
+            onClick={toggleMic}
+            className={`text-xs flex items-center gap-1 px-2 py-1 rounded-lg ${
+              isRecording ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {isRecording ? <MicOff size={12} /> : <Mic size={12} />}
+            {isRecording ? 'Stop' : 'Dictate'}
+          </button>
+        </div>
+        <textarea
+          rows={3}
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          placeholder="System running at proper pressures, customer happy, left old part in garage..."
+          className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] resize-none"
+        />
+      </div>
+
+      <Button
+        className="w-full bg-[#1A6E45] hover:bg-[#145a38] h-12 text-base font-semibold"
+        disabled={mutation.isPending}
+        onClick={() => mutation.mutate()}
+      >
+        <CheckCircle size={18} className="mr-2" />
+        {mutation.isPending ? 'Closing out...' : 'Confirm — Job Complete'}
+      </Button>
+      <button
+        onClick={onCancel}
+        className="w-full text-xs text-gray-400 hover:text-gray-600 text-center py-1"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 export default function FieldPage() {
   const queryClient = useQueryClient();
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -287,6 +404,7 @@ export default function FieldPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [showCOForm, setShowCOForm] = useState(false);
+  const [showCloseOut, setShowCloseOut] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   const { data: techsData } = useQuery({
@@ -608,6 +726,33 @@ export default function FieldPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Close Out Job */}
+      {job?.status !== 'complete' && job?.status !== 'ready_to_invoice' &&
+       job?.status !== 'invoiced' && job?.status !== 'paid' && (
+        <Card className="mt-4 border-[#1A6E45]">
+          <CardContent className="pt-4">
+            <CloseOutForm
+              jobId={selectedJobId!}
+              techId={selectedTechId!}
+              onSuccess={() => {
+                setShowCloseOut(false);
+                setSelectedJobId(null);
+              }}
+              onCancel={() => setShowCloseOut(false)}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Already closed out */}
+      {(job?.status === 'complete' || job?.status === 'ready_to_invoice' ||
+        job?.status === 'invoiced' || job?.status === 'paid') && (
+        <div className="mt-4 flex items-center justify-center gap-2 py-3 bg-green-50 rounded-xl border border-green-200">
+          <CheckCircle size={16} className="text-green-600" />
+          <span className="text-sm font-medium text-green-700">Job closed out</span>
+        </div>
       )}
     </div>
   );
