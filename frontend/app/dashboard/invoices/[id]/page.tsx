@@ -293,46 +293,14 @@ export default function InvoiceDetailPage() {
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-gray-100">
-                  {!showSendForm ? (
-                    <Button
-                      className="w-full bg-[#1A6E45] hover:bg-[#145a38]"
-                      disabled={!allChecked}
-                      onClick={() => setShowSendForm(true)}
-                    >
-                      <Send size={14} className="mr-2" />
-                      Send Invoice
-                    </Button>
-                  ) : (
-                    <div className="space-y-2">
-                      <div>
-                        <label className="text-xs text-gray-500">Customer Email</label>
-                        <input
-                          autoFocus
-                          type="email"
-                          value={customerEmail}
-                          onChange={e => setCustomerEmail(e.target.value)}
-                          placeholder="customer@email.com"
-                          className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
-                        />
-                        {job?.customer_email && customerEmail === job.customer_email && (
-                          <p className="text-xs text-gray-400 mt-0.5">Auto-filled from customer record</p>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          className="flex-1 bg-[#1A6E45] hover:bg-[#145a38] text-xs h-8"
-                          disabled={!customerEmail || sendMutation.isPending}
-                          onClick={() => sendMutation.mutate()}
-                        >
-                          {sendMutation.isPending ? 'Sending...' : 'Send Invoice'}
-                        </Button>
-                        <Button size="sm" variant="outline" className="text-xs h-8"
-                          onClick={() => setShowSendForm(false)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  <Button
+                    className="w-full bg-[#1A6E45] hover:bg-[#145a38]"
+                    disabled={!allChecked}
+                    onClick={() => router.push(`/dashboard/invoices/${invoiceId}/preview`)}
+                  >
+                    <Send size={14} className="mr-2" />
+                    Preview &amp; Send Invoice
+                  </Button>
                   {!allChecked && (
                     <p className="text-xs text-gray-400 text-center mt-2">
                       Complete all checklist items to send

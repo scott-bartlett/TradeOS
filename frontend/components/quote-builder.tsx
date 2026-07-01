@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { jobsApi } from '@/lib/api';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +20,7 @@ interface Props {
 
 export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const [hours, setHours] = useState<string>(job.estimated_hours?.toString() || '');
   const [rate, setRate] = useState<string>(job.labor_rate?.toString() || '110');
@@ -262,54 +264,14 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
             </div>
           ) : (
             <>
-              {!showSendForm ? (
-                <Button
-                  size="sm"
-                  className="w-full bg-[#1A6E45] hover:bg-[#145a38] text-xs"
-                  onClick={() => setShowSendForm(true)}
-                >
-                  <Send size={12} className="mr-2" />
-                  Generate &amp; Send Quote
-                </Button>
-              ) : (
-                <div className="space-y-2">
-                  <div>
-                    <label className="text-xs text-gray-500">Customer Email</label>
-                    <input
-                      autoFocus
-                      type="email"
-                      value={customerEmail}
-                      onChange={e => setCustomerEmail(e.target.value)}
-                      placeholder="customer@email.com"
-                      className="mt-1 w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
-                    />
-                    {job.customer_email && customerEmail === job.customer_email && (
-                      <p className="text-xs text-gray-400 mt-0.5">Auto-filled from customer record</p>
-                    )}
-                  </div>
-                  <textarea
-                    value={quoteNotes}
-                    onChange={e => setQuoteNotes(e.target.value)}
-                    placeholder="Optional notes for customer..."
-                    rows={2}
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45] resize-none"
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      className="flex-1 bg-[#1A6E45] hover:bg-[#145a38] text-xs h-8"
-                      disabled={!customerEmail || sendQuoteMutation.isPending}
-                      onClick={() => sendQuoteMutation.mutate()}
-                    >
-                      {sendQuoteMutation.isPending ? 'Sending...' : 'Send Quote'}
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-xs h-8"
-                      onClick={() => setShowSendForm(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <Button
+                size="sm"
+                className="w-full bg-[#1A6E45] hover:bg-[#145a38] text-xs"
+                onClick={() => router.push(`/dashboard/jobs/${jobId}/quote-preview`)}
+              >
+                <Send size={12} className="mr-2" />
+                Preview &amp; Send Quote
+              </Button>
             </>
           )}
         </div>
