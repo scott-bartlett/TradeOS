@@ -179,7 +179,7 @@ async def generate_supply_list(
 
     message = client.messages.create(
         model=settings.anthropic_model,
-        max_tokens=4096,
+        max_tokens=8192,
         messages=[{"role": "user", "content": prompt}]
     )
 
@@ -188,6 +188,7 @@ async def generate_supply_list(
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
+        raw = raw.rsplit("```", 1)[0]
 
     return json.loads(raw.strip())
 
