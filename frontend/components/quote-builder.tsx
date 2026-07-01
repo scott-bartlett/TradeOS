@@ -252,7 +252,8 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
           onClick={() => savePricingMutation.mutate()}
           disabled={savePricingMutation.isPending}
         >
-          {savePricingMutation.isPending ? 'Saving...' : 'Save Pricing'}
+          {savePricingMutation.isPending ? 'Saving...' :
+           savePricingMutation.isSuccess ? '✓ Saved' : 'Save Pricing'}
         </Button>
 
         {/* ── Send Quote ── */}
