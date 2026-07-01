@@ -149,6 +149,8 @@ export const invoicesApi = {
     api.post(`/api/invoices/${invoiceId}/send`, { customer_email: customerEmail }).then(r => r.data),
   markPaid: (invoiceId: string, amountPaid?: number) =>
     api.post(`/api/invoices/${invoiceId}/mark-paid`, { amount_paid: amountPaid }).then(r => r.data),
+  revertToDraft: (invoiceId: string) =>
+    api.post(`/api/invoices/${invoiceId}/revert`).then(r => r.data),
 };
 
 // ── USERS ─────────────────────────────────────────────────────────────────────

@@ -552,13 +552,42 @@ async def generate_dashboard_flags_endpoint(db: AsyncSession = Depends(get_db)):
 
 @router.get("/{job_id}")
 async def get_job(job_id: str, db: AsyncSession = Depends(get_db)):
+    from app.models.customer import Customer, ServiceLocation
+
     result = await db.execute(select(Job).where(Job.id == uuid.UUID(job_id)))
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Get customer and location for display
+    customer_name = None
+    customer_email = None
+    service_address = None
+    service_city = None
+
+    if job.customer_id:
+        c_result = await db.execute(select(Customer).where(Customer.id == job.customer_id))
+        customer = c_result.scalar_one_or_none()
+        if customer:
+            customer_name = customer.display_name
+            customer_email = customer.email
+
+    if job.service_location_id:
+        l_result = await db.execute(
+            select(ServiceLocation).where(ServiceLocation.id == job.service_location_id)
+        )
+        location = l_result.scalar_one_or_none()
+        if location:
+            service_address = f"{location.street}, {location.city}"
+            service_city = location.city
+
     return {
         "job_id": str(job.id), "job_number": job.job_number, "title": job.title,
         "status": job.status, "vertical": job.vertical,
+        "customer_name": customer_name,
+        "customer_email": customer_email,
+        "service_address": service_address,
+        "service_city": service_city,
         "scope_of_work": job.scope_of_work, "ai_analysis": job.ai_analysis,
         "estimated_hours": float(job.estimated_hours) if job.estimated_hours else None,
         "actual_hours": float(job.actual_hours) if job.actual_hours else None,
@@ -573,7 +602,6 @@ async def get_job(job_id: str, db: AsyncSession = Depends(get_db)):
         "scheduled_date": job.scheduled_date.isoformat() if job.scheduled_date else None,
         "created_at": job.created_at.isoformat(), "updated_at": job.updated_at.isoformat()
     }
-
 
 # ── UPDATE STATUS ─────────────────────────────────────────────────────────────
 

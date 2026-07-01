@@ -30,6 +30,7 @@ Last updated: June 29, 2026
 
 - [ ] **Scheduled date / arrival window** — Fields exist on the model but no UI to set them. Useful for Marcus to know when he's expected on site.
 - [ ] **Actual hours field on job close** — When Marcus finishes a job, he should be able to log actual hours from the field app. Currently only editable from the office job detail page.
+- [ ] **Per-tech labor rates** — Each tech has two rates on their User record: `billable_rate` (what we charge the customer) and `cost_rate` (what we pay the tech). When a tech is assigned to a job, Quote Builder uses their billable rate automatically. Gross profit then becomes accurate: materials profit (markup amount) + labor profit ((billable - cost) × hours) = true gross margin. Currently Jamie bundles cost + profit into one labor rate which works for quoting but makes profitability analysis meaningless. This is a prerequisite for the business intelligence layer.
 
 ---
 
@@ -48,6 +49,8 @@ Last updated: June 29, 2026
 ---
 
 ## Platform / Infrastructure
+
+- [ ] **Supply list generation — paginated/categorized for large jobs** — Current approach asks Claude to return the entire supply list in one response, which hits token limits on large jobs (new construction electrical, whole-house builds). Fix: break generation into category-based calls (rough-in, fixtures, gear/panels, consumables, etc.) and merge results. Critical before expanding beyond HVAC to electrical, pipefitting, and other high-SKU verticals. Streaming line items as they arrive is the ideal long-term solution.
 
 - [ ] **QuickBooks integration** — Explicitly out of MVP scope. Invoice sync after Diana approves. Customer sync on create.
 - [ ] **SendGrid setup** — Currently logging to Railway console in dev. Need FROM_EMAIL and SENDGRID_API_KEY configured for real email delivery.

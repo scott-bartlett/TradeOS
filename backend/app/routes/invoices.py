@@ -574,6 +574,24 @@ async def mark_paid(invoice_id: str, data: MarkPaidRequest,
     invoice.status = InvoiceStatus.paid
     invoice.paid_at = datetime.utcnow()
 
+@router.post("/{invoice_id}/revert")
+async def revert_to_draft(invoice_id: str, db: AsyncSession = Depends(get_db)):
+    """Revert a sent invoice back to draft so Jamie can fix mistakes."""
+    result = await db.execute(
+        select(Invoice).where(Invoice.id == uuid.UUID(invoice_id))
+    )
+    invoice = result.scalar_one_or_none()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    if invoice.status == InvoiceStatus.paid:
+        raise HTTPException(status_code=400, detail="Cannot revert a paid invoice")
+
+    invoice.status = InvoiceStatus.draft
+    invoice.sent_at = None
+    await db.commit()
+    return {"message": "Invoice reverted to draft", "invoice_id": invoice_id}
+
     # Update job status
     job_result = await db.execute(select(Job).where(Job.id == invoice.job_id))
     job = job_result.scalar_one_or_none()

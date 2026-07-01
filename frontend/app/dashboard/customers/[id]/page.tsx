@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { StateSelect, ZipInput } from '@/components/address-inputs';
 import { formatDate, formatDateTime } from '@/lib/date-utils';
+import { NewJobDialog } from '@/components/new-job-dialog';
 
 const statusColor: Record<string, string> = {
   estimate:    'bg-gray-100 text-gray-600',
@@ -182,6 +183,7 @@ export default function CustomerDetailPage() {
   const queryClient = useQueryClient();
   const customerId = id as string;
   const [showAddLocation, setShowAddLocation] = useState(false);
+  const [showNewJob, setShowNewJob] = useState(false);
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ['customer', customerId],
@@ -243,7 +245,7 @@ export default function CustomerDetailPage() {
         </div>
         <Button
           className="bg-[#1A6E45] hover:bg-[#145a38] text-sm"
-          onClick={() => router.push(`/dashboard/jobs?new=1&customer=${customerId}`)}
+          onClick={() => setShowNewJob(true)}
         >
           <Plus size={14} className="mr-2" />
           New Job
@@ -483,6 +485,18 @@ export default function CustomerDetailPage() {
           )}
         </div>
       </div>
+
+      <NewJobDialog
+        open={showNewJob}
+        onClose={() => setShowNewJob(false)}
+        prefilledCustomerId={customerId}
+        prefilledCustomerName={customer.display_name}
+        onSuccess={(jobId: string) => {
+          queryClient.invalidateQueries({ queryKey: ['customer-jobs', customerId] });
+          setShowNewJob(false);
+          router.push(`/dashboard/jobs/${jobId}`);
+        }}
+      />
     </div>
   );
 }

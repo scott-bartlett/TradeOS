@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { invoicesApi } from '@/lib/api';
+import { invoicesApi, jobsApi, changeOrdersApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle, Circle, Send, DollarSign, Package, Wrench } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Circle, Send, DollarSign, Package, Wrench, RotateCcw, AlertTriangle } from 'lucide-react';
 import { formatDate, formatDateTime } from '@/lib/date-utils';
 
 const checklistItems = [
@@ -27,11 +27,33 @@ export default function InvoiceDetailPage() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [showMarkPaid, setShowMarkPaid] = useState(false);
   const [paidAmount, setPaidAmount] = useState('');
+  const [showUndoConfirm, setShowUndoConfirm] = useState(false);
 
   const { data: invoice, isLoading } = useQuery({
     queryKey: ['invoice', invoiceId],
     queryFn: () => invoicesApi.get(invoiceId),
   });
+
+  // Fetch job to get customer email
+  const { data: job } = useQuery({
+    queryKey: ['job', invoice?.job_id],
+    queryFn: () => jobsApi.get(invoice!.job_id),
+    enabled: !!invoice?.job_id,
+  });
+
+  // Fetch change orders for this job to show field-approved ones
+  const { data: coData } = useQuery({
+    queryKey: ['change-orders', invoice?.job_id],
+    queryFn: () => changeOrdersApi.list(invoice!.job_id),
+    enabled: !!invoice?.job_id,
+  });
+
+  // Auto-populate customer email when job loads
+  useEffect(() => {
+    if (job?.customer_email && !customerEmail) {
+      setCustomerEmail(job.customer_email);
+    }
+  }, [job]);
 
   const reviewMutation = useMutation({
     mutationFn: (data: any) => invoicesApi.updateReview(invoiceId, data),
@@ -57,6 +79,16 @@ export default function InvoiceDetailPage() {
     },
   });
 
+  // Undo — revert invoice back to draft so Jamie can fix mistakes
+  const undoMutation = useMutation({
+    mutationFn: () => invoicesApi.revertToDraft(invoiceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['invoice', invoiceId] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      setShowUndoConfirm(false);
+    },
+  });
+
   if (isLoading) return <div className="p-6 text-sm text-gray-400">Loading invoice...</div>;
   if (!invoice) return <div className="p-6 text-sm text-red-500">Invoice not found</div>;
 
@@ -69,6 +101,11 @@ export default function InvoiceDetailPage() {
   const labor = lineItems.labor || {};
   const materials = lineItems.materials || [];
   const changeOrders = lineItems.change_orders || [];
+
+  // Field-approved COs not yet priced — show as warning
+  const fieldApprovedCOs = (coData?.change_orders || []).filter(
+    (co: any) => co.status === 'field_approved'
+  );
 
   const toggleCheck = (key: string) => {
     if (alreadySent) return;
@@ -99,6 +136,7 @@ export default function InvoiceDetailPage() {
             </span>
           </div>
           <p className="text-sm text-gray-400 mt-0.5">
+            {invoice.customer_name && `${invoice.customer_name} · `}
             {invoice.job_title && `${invoice.job_title} · `}
             {invoice.sent_at
               ? `Sent ${formatDate(invoice.sent_at)}`
@@ -115,6 +153,33 @@ export default function InvoiceDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Field-approved CO warning */}
+      {fieldApprovedCOs.length > 0 && !isPaid && (
+        <div className="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+          <AlertTriangle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-700">
+              {fieldApprovedCOs.length} field change order{fieldApprovedCOs.length > 1 ? 's' : ''} need pricing
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              These were captured in the field but haven't been priced yet. Price and approve them before sending this invoice.
+            </p>
+            {fieldApprovedCOs.map((co: any) => (
+              <p key={co.change_order_id} className="text-xs text-amber-700 mt-1 font-medium">
+                · CO #{co.co_number}: {co.description}
+                {co.rough_hours && ` (~${co.rough_hours} hrs)`}
+              </p>
+            ))}
+            <button
+              onClick={() => router.push(`/dashboard/jobs/${invoice.job_id}`)}
+              className="text-xs text-amber-700 underline mt-1"
+            >
+              Go to job to price change orders →
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-5">
         {/* Left — line items + actions */}
@@ -239,14 +304,20 @@ export default function InvoiceDetailPage() {
                     </Button>
                   ) : (
                     <div className="space-y-2">
-                      <input
-                        autoFocus
-                        type="email"
-                        value={customerEmail}
-                        onChange={e => setCustomerEmail(e.target.value)}
-                        placeholder="Customer email address"
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
-                      />
+                      <div>
+                        <label className="text-xs text-gray-500">Customer Email</label>
+                        <input
+                          autoFocus
+                          type="email"
+                          value={customerEmail}
+                          onChange={e => setCustomerEmail(e.target.value)}
+                          placeholder="customer@email.com"
+                          className="mt-1 w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#1A6E45]"
+                        />
+                        {job?.customer_email && customerEmail === job.customer_email && (
+                          <p className="text-xs text-gray-400 mt-0.5">Auto-filled from customer record</p>
+                        )}
+                      </div>
                       <div className="flex gap-2">
                         <Button
                           className="flex-1 bg-[#1A6E45] hover:bg-[#145a38] text-xs h-8"
@@ -272,18 +343,45 @@ export default function InvoiceDetailPage() {
             </Card>
           )}
 
-          {/* Sent confirmation */}
+          {/* Sent — with undo option */}
           {alreadySent && !isPaid && (
             <Card className="border-blue-200 bg-blue-50">
               <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-3">
-                  <CheckCircle size={16} className="text-blue-600" />
-                  <div>
-                    <p className="text-sm font-semibold text-blue-700">Invoice Sent</p>
-                    <p className="text-xs text-blue-500">
-                      {invoice.sent_at && formatDateTime(invoice.sent_at)}
-                    </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle size={16} className="text-blue-600" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-700">Invoice Sent</p>
+                      <p className="text-xs text-blue-500">
+                        {invoice.sent_at && formatDateTime(invoice.sent_at)}
+                      </p>
+                    </div>
                   </div>
+                  {!showUndoConfirm ? (
+                    <button
+                      onClick={() => setShowUndoConfirm(true)}
+                      className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-1"
+                    >
+                      <RotateCcw size={12} /> Undo
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-red-600">Revert to draft?</p>
+                      <button
+                        onClick={() => undoMutation.mutate()}
+                        disabled={undoMutation.isPending}
+                        className="text-xs text-red-600 font-semibold hover:underline"
+                      >
+                        {undoMutation.isPending ? 'Reverting...' : 'Yes'}
+                      </button>
+                      <button
+                        onClick={() => setShowUndoConfirm(false)}
+                        className="text-xs text-gray-400 hover:underline"
+                      >
+                        No
+                      </button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -321,7 +419,6 @@ export default function InvoiceDetailPage() {
                 ['Amount Paid', invoice.amount_paid > 0 ? `$${invoice.amount_paid.toLocaleString()}` : null],
                 ['Balance Due', invoice.balance_due != null ? `$${invoice.balance_due.toLocaleString()}` : null],
                 ['Due Date',    invoice.due_date ? formatDate(invoice.due_date) : null],
-                ['QB Synced',   invoice.quickbooks_invoice_id ? '✓ Yes' : 'Pending'],
               ].filter(([, v]) => v).map(([label, value]) => (
                 <div key={label as string} className="flex justify-between">
                   <span className="text-xs text-gray-400">{label}</span>

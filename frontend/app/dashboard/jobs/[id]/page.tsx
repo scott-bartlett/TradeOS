@@ -364,7 +364,17 @@ export default function JobDetailPage() {
               {job.status.replace('_', ' ')}
             </span>
           </div>
-          <p className="text-sm text-gray-400 mt-0.5">{job.job_number} · {job.vertical?.toUpperCase()}</p>
+          {job.customer_name && (
+            <p className="text-sm text-gray-600 mt-0.5">{job.customer_name}</p>
+          )}
+          <p className="text-xs text-gray-400 mt-0.5">
+            {job.service_address
+              ? `📍 ${job.service_address}`
+              : job.service_city
+              ? `📍 ${job.service_city}`
+              : job.job_number}
+            {' · '}{job.vertical?.toUpperCase()}
+          </p>
         </div>
         {job.quote_total && (
           <div className="text-right">
