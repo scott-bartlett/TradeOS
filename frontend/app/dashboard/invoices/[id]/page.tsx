@@ -296,7 +296,7 @@ export default function InvoiceDetailPage() {
                   <Button
                     className="w-full bg-[#1A6E45] hover:bg-[#145a38]"
                     disabled={!allChecked}
-                    onClick={() => router.push(`/dashboard/invoices/${invoiceId}/preview`)}
+                    onClick={() => window.location.href = `/dashboard/invoices/${invoiceId}/preview`}
                   >
                     <Send size={14} className="mr-2" />
                     Preview &amp; Send Invoice

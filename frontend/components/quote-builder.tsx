@@ -267,7 +267,7 @@ export function QuoteBuilder({ jobId, supplyItems, job }: Props) {
               <Button
                 size="sm"
                 className="w-full bg-[#1A6E45] hover:bg-[#145a38] text-xs"
-                onClick={() => router.push(`/dashboard/jobs/${jobId}/quote-preview`)}
+                onClick={() => window.location.href = `/dashboard/jobs/${jobId}/quote-preview`}
               >
                 <Send size={12} className="mr-2" />
                 Preview &amp; Send Quote
