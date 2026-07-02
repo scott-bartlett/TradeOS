@@ -480,11 +480,13 @@ async def get_quote_preview(job_id: str, db: AsyncSession = Depends(get_db)):
     co_result = await db.execute(select(ChangeOrder).where(ChangeOrder.job_id == uuid.UUID(job_id)))
     change_orders = co_result.scalars().all()
 
-    ai_summary = None
-    try:
-        from app.services.ai_provider import get_ai_response
-        materials_text = ", ".join([i.description for i in supply_items[:10]]) if supply_items else "to be determined"
-        prompt = f"""Write a 2-3 sentence professional summary for a customer quote.
+    # ── AI Summary — cached ──────────────────────────────────────────────────
+    ai_summary = job.ai_quote_summary  # use cached version if exists
+    if not ai_summary:
+        try:
+            from app.services.ai_provider import get_ai_response
+            materials_text = ", ".join([i.description for i in supply_items[:10]]) if supply_items else "to be determined"
+            prompt = f"""Write a 2-3 sentence professional summary for a customer quote.
 Job: {job.title}
 Scope: {job.scope_of_work or "Electrical service work"}
 Materials: {materials_text}
@@ -492,9 +494,12 @@ Estimated hours: {float(job.estimated_hours or 0):.1f}
 Write from the contractor's perspective describing what will be done.
 Be specific but not technical. No pricing. No bullet points.
 Return only the summary paragraph."""
-        ai_summary = await get_ai_response(prompt, max_tokens=256)
-    except Exception:
-        ai_summary = job.scope_of_work or f"Professional electrical service for {job.title}."
+            ai_summary = await get_ai_response(prompt, max_tokens=256)
+            # Cache it
+            job.ai_quote_summary = ai_summary
+            await db.commit()
+        except Exception:
+            ai_summary = job.scope_of_work or f"Professional electrical service for {job.title}."
 
     return {
         "job_id": str(job.id),

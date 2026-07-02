@@ -65,6 +65,7 @@ class Invoice(BaseModel):
     sent_at         = Column(DateTime)
     due_date        = Column(DateTime)
     paid_at         = Column(DateTime)
+    ai_invoice_summary = Column(Text)   # cached AI summary for invoice PDF
 
     # QuickBooks sync
     quickbooks_invoice_id = Column(String(100))  # QB invoice ID after sync

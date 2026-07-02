@@ -250,16 +250,20 @@ async def get_invoice_preview(invoice_id: str, db: AsyncSession = Depends(get_db
     co_result = await db.execute(select(ChangeOrder).where(ChangeOrder.job_id == invoice.job_id))
     change_orders = co_result.scalars().all()
 
-    notes_result = await db.execute(select(FieldNote).where(FieldNote.job_id == invoice.job_id).order_by(FieldNote.created_at))
+    notes_result = await db.execute(
+        select(FieldNote).where(FieldNote.job_id == invoice.job_id).order_by(FieldNote.created_at)
+    )
     field_notes = notes_result.scalars().all()
 
-    ai_summary = None
-    try:
-        from app.services.ai_provider import get_ai_response
-        notes_text = " | ".join([n.note_text for n in field_notes[-5:]]) if field_notes else ""
-        materials_text = ", ".join([i.description for i in supply_items[:8]]) if supply_items else ""
-        cos_text = "; ".join([f"CO#{co.co_number}: {co.description}" for co in change_orders if co.status == "approved"])
-        prompt = f"""Write a 2-3 sentence professional summary of completed work for a customer invoice.
+    # ── AI Summary — cached ──────────────────────────────────────────────────
+    ai_summary = invoice.ai_invoice_summary  # use cached version if exists
+    if not ai_summary:
+        try:
+            from app.services.ai_provider import get_ai_response
+            notes_text = " | ".join([n.note_text for n in field_notes[-5:]]) if field_notes else ""
+            materials_text = ", ".join([i.description for i in supply_items[:8]]) if supply_items else ""
+            cos_text = "; ".join([f"CO#{co.co_number}: {co.description}" for co in change_orders if co.status == "approved"])
+            prompt = f"""Write a 2-3 sentence professional summary of completed work for a customer invoice.
 Job: {job.title if job else "Electrical service"}
 Scope: {job.scope_of_work if job else ""}
 Materials used: {materials_text}
@@ -267,9 +271,12 @@ Field notes: {notes_text}
 Change orders: {cos_text}
 Write from the contractor's perspective, past tense. No pricing. No bullet points.
 Return only the summary paragraph."""
-        ai_summary = await get_ai_response(prompt, max_tokens=256)
-    except Exception:
-        ai_summary = f"Work completed for {job.title if job else 'electrical service'}."
+            ai_summary = await get_ai_response(prompt, max_tokens=256)
+            # Cache it
+            invoice.ai_invoice_summary = ai_summary
+            await db.commit()
+        except Exception:
+            ai_summary = f"Work completed for {job.title if job else 'electrical service'}."
 
     return {
         "invoice_id": str(invoice.id),
