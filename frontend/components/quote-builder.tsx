@@ -1,3 +1,4 @@
+// TradeOS QuoteBuilder v2 - always saves quote_total
 'use client';
 
 import { useState, useEffect } from 'react';

@@ -39,6 +39,7 @@ export const jobsApi = {
     labor_rate?: number;
     material_markup?: number;
     notes?: string;
+    ai_summary?: string;
   }) => api.post(`/api/jobs/${jobId}/send-quote`, data).then(r => r.data),
 
   // Deposit
